@@ -1,0 +1,1163 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+// --- IMPORTS ---
+use chrono::Utc;
+use quick_xml::de::from_str;
+use quick_xml::events::Event;
+use quick_xml::se::to_string;
+use quick_xml::{Reader, Writer};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
+use tauri::{Emitter, Manager};
+use tauri::{LogicalSize, PhysicalPosition};
+use unrar;
+use winreg::enums::*;
+use winreg::RegKey;
+use zip::ZipArchive;
+
+// --- STRUCTS ---
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ModProperty {
+    #[serde(rename = "@name")]
+    name: String,
+    #[serde(rename = "@value", default)]
+    value: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename = "Property")]
+struct ModEntry {
+    #[serde(rename = "@name")]
+    entry_name: String,
+    #[serde(rename = "@value")]
+    entry_value: String,
+    #[serde(rename = "@_index")]
+    index: String,
+    #[serde(rename = "Property", default)]
+    properties: Vec<ModProperty>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct TopLevelProperty {
+    #[serde(rename = "@name")]
+    name: String,
+    #[serde(rename = "@value", default)]
+    value: Option<String>,
+    #[serde(rename = "Property", default)]
+    mods: Vec<ModEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename = "Data")]
+struct SettingsData {
+    #[serde(rename = "@template")]
+    template: String,
+    #[serde(rename = "Property")]
+    properties: Vec<TopLevelProperty>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WindowState {
+    x: i32,
+    y: i32,
+    maximized: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct ModInfo {
+    #[serde(rename = "modId")]
+    mod_id: Option<String>,
+    #[serde(rename = "fileId")]
+    file_id: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct ModInstallInfo {
+    name: String,
+    temp_path: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct ModConflictInfo {
+    new_mod_name: String,
+    temp_path: String,
+    old_mod_folder_name: String,
+}
+
+#[derive(serde::Serialize)]
+struct InstallationAnalysis {
+    successes: Vec<ModInstallInfo>,
+    conflicts: Vec<ModConflictInfo>,
+    messy_archive_path: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+struct LocalModInfo {
+    folder_name: String,
+    mod_id: Option<String>,
+    file_id: Option<String>,
+    version: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+struct ModRenderData {
+    folder_name: String,
+    enabled: bool,
+    priority: u32,
+    local_info: Option<LocalModInfo>,
+}
+
+// --- HELPER FUNCTIONS ---
+fn read_mod_info(mod_path: &Path) -> Option<ModInfo> {
+    let info_path = mod_path.join("mod_info.json");
+    if !info_path.exists() {
+        return None;
+    }
+    fs::read_to_string(info_path)
+        .ok()
+        .and_then(|content| serde_json::from_str(&content).ok())
+}
+
+fn get_state_file_path() -> PathBuf {
+    let exe_path = env::current_exe().expect("Failed to find executable path");
+    let exe_dir = exe_path
+        .parent()
+        .expect("Failed to get parent directory of executable");
+    exe_dir.join("window-state.json")
+}
+
+fn find_game_path() -> Option<PathBuf> {
+    if cfg!(not(windows)) {
+        return None;
+    }
+    find_steam_path().or_else(find_gog_path)
+}
+
+fn find_gog_path() -> Option<PathBuf> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let gog_key = hklm
+        .open_subkey(r"SOFTWARE\WOW6432Node\GOG.com\Games\1446223351")
+        .ok()?;
+    let game_path_str: String = gog_key.get_value("PATH").ok()?;
+    let game_path = PathBuf::from(game_path_str);
+    if game_path.join("Binaries").is_dir() {
+        Some(game_path)
+    } else {
+        None
+    }
+}
+
+fn find_steam_path() -> Option<PathBuf> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let steam_key = hklm.open_subkey(r"SOFTWARE\WOW6432Node\Valve\Steam").ok()?;
+    let steam_path_str: String = steam_key.get_value("InstallPath").ok()?;
+    let steam_path = PathBuf::from(steam_path_str);
+    let mut library_folders = vec![steam_path.clone()];
+    if let Ok(content) = fs::read_to_string(steam_path.join("steamapps").join("libraryfolders.vdf"))
+    {
+        for line in content.lines() {
+            if let Some(path_str) = line.split('"').nth(3) {
+                let p = PathBuf::from(path_str.replace("\\\\", "\\"));
+                if p.exists() {
+                    library_folders.push(p);
+                }
+            }
+        }
+    }
+    for folder in library_folders {
+        let manifest_path = folder.join("steamapps").join("appmanifest_275850.acf");
+        if let Ok(content) = fs::read_to_string(manifest_path) {
+            if let Some(dir_str) = content
+                .lines()
+                .find(|l| l.contains("\"installdir\""))
+                .and_then(|l| l.split('"').nth(3))
+            {
+                let game_path = folder.join("steamapps").join("common").join(dir_str);
+                if game_path.is_dir() {
+                    return Some(game_path);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn extract_archive_to_temp(archive_path: &Path, mods_path: &Path) -> Result<PathBuf, String> {
+    let temp_extract_path =
+        mods_path.join(format!("temp_extract_{}", Utc::now().timestamp_millis()));
+    fs::create_dir_all(&temp_extract_path)
+        .map_err(|e| format!("Could not create temporary extraction directory: {}", e))?;
+
+    let extension = archive_path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("")
+        .to_lowercase();
+    match extension.as_str() {
+        "zip" => {
+            let file = fs::File::open(archive_path).map_err(|e| {
+                format!(
+                    "Failed to open zip file '{}': {}",
+                    archive_path.display(),
+                    e
+                )
+            })?;
+            let mut archive = ZipArchive::new(file).map_err(|e| {
+                format!(
+                    "Failed to read zip archive '{}': {}",
+                    archive_path.display(),
+                    e
+                )
+            })?;
+            archive.extract(&temp_extract_path).map_err(|e| {
+                format!(
+                    "Failed to extract zip file '{}': {}",
+                    archive_path.display(),
+                    e
+                )
+            })?;
+        }
+        "rar" => {
+            let mut archive = unrar::Archive::new(archive_path)
+                .open_for_processing()
+                .map_err(|e| {
+                    format!(
+                        "Failed to open RAR archive '{}': {:?}",
+                        archive_path.display(),
+                        e
+                    )
+                })?;
+            while let Ok(Some(header)) = archive.read_header() {
+                archive = header.extract_to(&temp_extract_path).map_err(|e| {
+                    format!(
+                        "Failed to extract from RAR archive '{}': {:?}",
+                        archive_path.display(),
+                        e
+                    )
+                })?;
+            }
+        }
+        _ => return Err(format!("Unsupported file type: .{}", extension)),
+    }
+    Ok(temp_extract_path)
+}
+
+// --- TAURI COMMANDS ---
+
+#[tauri::command]
+fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let settings_file_path = game_path
+        .join("Binaries")
+        .join("SETTINGS")
+        .join("GCMODSETTINGS.MXML");
+
+    if !settings_file_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let xml_content = fs::read_to_string(&settings_file_path)
+        .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
+    let root: SettingsData =
+        from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
+
+    let mut mods_to_render = Vec::new();
+
+    if let Some(prop) = root.properties.iter().find(|p| p.name == "Data") {
+        for mod_entry in &prop.mods {
+            let folder_name_prop = mod_entry
+                .properties
+                .iter()
+                .find(|p| p.name == "Name")
+                .and_then(|p| p.value.as_ref());
+            
+            if let Some(folder_name) = folder_name_prop {
+                let enabled = mod_entry
+                    .properties
+                    .iter()
+                    .find(|p| p.name == "Enabled")
+                    .and_then(|p| p.value.as_deref())
+                    .unwrap_or("false")
+                    .eq_ignore_ascii_case("true");
+                
+                let priority = mod_entry
+                    .properties
+                    .iter()
+                    .find(|p| p.name == "ModPriority")
+                    .and_then(|p| p.value.as_ref())
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
+
+                let mod_info_path = game_path.join("GAMEDATA").join("MODS").join(folder_name).join("mod_info.json");
+                let local_info = if let Ok(content) = fs::read_to_string(&mod_info_path) {
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        Some(LocalModInfo {
+                            folder_name: folder_name.clone(),
+                            mod_id: json_val.get("modId").or(json_val.get("id")).and_then(|v| v.as_str()).map(String::from),
+                            file_id: json_val.get("fileId").and_then(|v| v.as_str()).map(String::from),
+                            version: json_val.get("version").and_then(|v| v.as_str()).map(String::from),
+                        })
+                    } else { None }
+                } else { None };
+
+                mods_to_render.push(ModRenderData {
+                    folder_name: folder_name.clone(),
+                    enabled,
+                    priority,
+                    local_info,
+                });
+            }
+        }
+    }
+
+    mods_to_render.sort_by_key(|m| m.priority);
+
+    Ok(mods_to_render)
+}
+
+#[tauri::command]
+fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnalysis, String> {
+    let archive_path = Path::new(&archive_path_str);
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find the game installation path.".to_string())?;
+    let mods_path = game_path.join("GAMEDATA").join("MODS");
+    fs::create_dir_all(&mods_path).map_err(|e| e.to_string())?;
+
+    let mut installed_mods_by_id: HashMap<String, String> = HashMap::new();
+    if let Ok(entries) = fs::read_dir(&mods_path) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(info) = read_mod_info(&path) {
+                    if let (Some(mod_id), Some(folder_name)) =
+                        (info.mod_id, path.file_name().and_then(|n| n.to_str()))
+                    {
+                        installed_mods_by_id.insert(mod_id, folder_name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    let temp_extract_path = extract_archive_to_temp(archive_path, &mods_path)?;
+
+    let folder_entries: Vec<_> = fs::read_dir(&temp_extract_path)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .collect();
+
+    if folder_entries.is_empty() {
+        // Even if empty, we need to clean up. The previous RAII guard did this automatically.
+        // We will spawn a thread here as well for consistency.
+        let path_for_cleanup = temp_extract_path.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_secs(2)); // Give it a moment
+            if fs::remove_dir_all(&path_for_cleanup).is_ok() {
+                println!("Cleaned up empty temp dir: {}", path_for_cleanup.display());
+            }
+        });
+        return Ok(InstallationAnalysis {
+            successes: vec![],
+            conflicts: vec![],
+            messy_archive_path: Some(temp_extract_path.to_string_lossy().into_owned()),
+        });
+    }
+
+    let staging_path = mods_path.join(format!("temp_staging_{}", Utc::now().timestamp_millis()));
+    let mut successes = Vec::new();
+    let mut conflicts = Vec::new();
+
+    for entry in folder_entries {
+        let new_mod_path = entry.path();
+        let new_mod_name = new_mod_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut conflict_found = false;
+        if let Some(info) = read_mod_info(&new_mod_path) {
+            if let Some(mod_id) = info.mod_id {
+                if let Some(old_folder_name) = installed_mods_by_id.get(&mod_id) {
+                    if !staging_path.exists() {
+                        fs::create_dir_all(&staging_path).map_err(|e| e.to_string())?;
+                    }
+                    let staged_mod_path = staging_path.join(&new_mod_name);
+                    fs::rename(&new_mod_path, &staged_mod_path).map_err(|e| e.to_string())?;
+
+                    conflicts.push(ModConflictInfo {
+                        new_mod_name: new_mod_name.clone(),
+                        temp_path: staged_mod_path.to_string_lossy().into_owned(),
+                        old_mod_folder_name: old_folder_name.clone(),
+                    });
+                    conflict_found = true;
+                }
+            }
+        }
+
+        if !conflict_found {
+            let final_dest_path = mods_path.join(&new_mod_name);
+            if final_dest_path.exists() {
+                if !staging_path.exists() {
+                    fs::create_dir_all(&staging_path).map_err(|e| e.to_string())?;
+                }
+                let staged_mod_path = staging_path.join(&new_mod_name);
+                fs::rename(&new_mod_path, &staged_mod_path).map_err(|e| e.to_string())?;
+
+                conflicts.push(ModConflictInfo {
+                    new_mod_name: new_mod_name.clone(),
+                    temp_path: staged_mod_path.to_string_lossy().into_owned(),
+                    old_mod_folder_name: new_mod_name.clone(),
+                });
+            } else {
+                fs::rename(&new_mod_path, &final_dest_path).map_err(|e| e.to_string())?;
+                successes.push(ModInstallInfo {
+                    name: new_mod_name,
+                    temp_path: final_dest_path.to_string_lossy().into_owned(),
+                });
+            }
+        }
+    }
+
+    // --- THIS IS THE NEW, DETACHED CLEANUP LOGIC ---
+    let path_for_cleanup = temp_extract_path.clone();
+    thread::spawn(move || {
+        // 1. Wait for a couple of seconds to let the OS release all file handles.
+        thread::sleep(Duration::from_secs(3));
+
+        // 2. Then, perform the robust retry loop.
+        let max_retries = 5;
+        let retry_delay = Duration::from_millis(500);
+        let mut cleanup_success = false;
+
+        for _ in 0..max_retries {
+            if fs::remove_dir_all(&path_for_cleanup).is_ok() {
+                cleanup_success = true;
+                println!("Successfully cleaned up temp dir in background: {}", path_for_cleanup.display());
+                break;
+            }
+            thread::sleep(retry_delay);
+        }
+
+        if !cleanup_success {
+            eprintln!("Warning: Background cleanup failed for temp directory at: {}", path_for_cleanup.display());
+        }
+    });
+    // --- END OF NEW LOGIC ---
+
+    Ok(InstallationAnalysis {
+        successes,
+        conflicts,
+        messy_archive_path: None,
+    })
+}
+
+#[tauri::command]
+fn resolve_conflict(
+    new_mod_name: String,
+    old_mod_folder_name: String,
+    temp_mod_path_str: String,
+    replace: bool,
+) -> Result<(), String> {
+    let game_path = find_game_path().ok_or_else(|| "Could not find game path.".to_string())?;
+    let mods_path = game_path.join("GAMEDATA").join("MODS");
+    let old_mod_path = mods_path.join(&old_mod_folder_name);
+    let final_new_mod_path = mods_path.join(&new_mod_name);
+    let temp_mod_path = PathBuf::from(&temp_mod_path_str);
+
+    if replace {
+        if old_mod_path.exists() {
+            fs::remove_dir_all(&old_mod_path)
+                .map_err(|e| format!("Failed to remove old mod: {}", e))?;
+        }
+        fs::rename(&temp_mod_path, &final_new_mod_path)
+            .map_err(|e| format!("Failed to move new mod into place: {}", e))?;
+    } else {
+        fs::remove_dir_all(&temp_mod_path)
+            .map_err(|e| format!("Failed to cleanup temp mod folder: {}", e))?;
+    }
+
+    if let Some(parent) = temp_mod_path.parent() {
+        if parent.exists() && parent.read_dir().map_or(false, |mut i| i.next().is_none()) {
+            fs::remove_dir(parent).ok();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_settings_file() -> Result<String, String> {
+    if let Some(game_path) = find_game_path() {
+        let settings_file = game_path
+            .join("Binaries")
+            .join("SETTINGS")
+            .join("GCMODSETTINGS.MXML");
+        if settings_file.exists() {
+            fs::remove_file(&settings_file).map_err(|e| {
+                format!(
+                    "Failed to delete file at '{}': {}",
+                    settings_file.display(),
+                    e
+                )
+            })?;
+            Ok("alertDeleteSuccess".to_string())
+        } else {
+            Ok("alertDeleteNotFound".to_string())
+        }
+    } else {
+        Err("alertDeleteError".to_string())
+    }
+}
+
+#[tauri::command]
+fn get_game_path() -> Option<String> {
+    find_game_path().map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn open_mods_folder() -> Result<(), String> {
+    if let Some(game_path) = find_game_path() {
+        let mods_path = game_path.join("GAMEDATA").join("MODS");
+        fs::create_dir_all(&mods_path).map_err(|e| {
+            format!(
+                "Could not create MODS folder at '{}': {}",
+                mods_path.display(),
+                e
+            )
+        })?;
+        open::that(&mods_path).map_err(|e| {
+            format!(
+                "Could not open MODS folder at '{}': {}",
+                mods_path.display(),
+                e
+            )
+        })?;
+        Ok(())
+    } else {
+        Err("Game path not found.".to_string())
+    }
+}
+
+#[tauri::command]
+fn save_file(file_path: String, content: String) -> Result<(), String> {
+    fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write to file '{}': {}", file_path, e))
+}
+
+#[tauri::command]
+fn finalize_mod_installation(temp_path: String, new_name: String) -> Result<(), String> {
+    let temp_folder = PathBuf::from(temp_path);
+    if !temp_folder.exists() {
+        return Err(format!(
+            "Temporary installation folder not found at '{}'.",
+            temp_folder.display()
+        ));
+    }
+    let mods_path = temp_folder
+        .parent()
+        .ok_or("Could not determine MODS folder path from temporary path.")?;
+    let final_dest_path = mods_path.join(&new_name);
+    if final_dest_path.exists() {
+        return Err(format!(
+            "A mod folder with the name '{}' already exists at '{}'.",
+            new_name,
+            final_dest_path.display()
+        ));
+    }
+    fs::rename(&temp_folder, &final_dest_path).map_err(|e| {
+        format!(
+            "Failed to rename '{}' to '{}': {}",
+            temp_folder.display(),
+            final_dest_path.display(),
+            e
+        )
+    })
+}
+
+#[tauri::command]
+fn cleanup_temp_folder(path: String) -> Result<(), String> {
+    let temp_folder = PathBuf::from(path);
+    if temp_folder.exists() {
+        fs::remove_dir_all(&temp_folder).map_err(|e| {
+            format!(
+                "Failed to clean up temporary folder at '{}': {}",
+                temp_folder.display(),
+                e
+            )
+        })?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn resize_window(window: tauri::Window, width: f64) -> Result<(), String> {
+    let current_height = window.outer_size().map_err(|e| e.to_string())?.height;
+    window
+        .set_size(LogicalSize::new(width, current_height as f64))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_mod(mod_name: String) -> Result<Vec<ModRenderData>, String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let settings_file_path = game_path
+        .join("Binaries")
+        .join("SETTINGS")
+        .join("GCMODSETTINGS.MXML");
+    let mod_to_delete_path = game_path.join("GAMEDATA").join("MODS").join(&mod_name);
+
+    if mod_to_delete_path.exists() {
+        fs::remove_dir_all(&mod_to_delete_path).map_err(|e| {
+            format!(
+                "Failed to delete mod folder for '{}' at '{}': {}",
+                mod_name,
+                mod_to_delete_path.display(),
+                e
+            )
+        })?;
+    }
+
+    let xml_content = fs::read_to_string(&settings_file_path)
+        .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
+    let mut root: SettingsData =
+        from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
+
+    let mut deleted_priority_val: Option<u32> = None;
+    for prop in root.properties.iter_mut() {
+        if prop.name == "Data" {
+            if let Some(index_to_delete) = prop.mods.iter().position(|entry| {
+                entry.properties.iter().any(|p| {
+                    p.name == "Name"
+                        && p.value
+                            .as_deref()
+                            .map_or(false, |v| v.eq_ignore_ascii_case(&mod_name))
+                })
+            }) {
+                deleted_priority_val = prop.mods[index_to_delete].properties.iter().find(|p| p.name == "ModPriority").and_then(|p| p.value.as_ref()).and_then(|v| v.parse::<u32>().ok());
+                prop.mods.remove(index_to_delete);
+            }
+            if let Some(deleted_p) = deleted_priority_val {
+                for mod_entry in prop.mods.iter_mut() {
+                    if let Some(priority_prop) = mod_entry.properties.iter_mut().find(|p| p.name == "ModPriority") {
+                        if let Some(current_p_str) = priority_prop.value.as_ref() {
+                            if let Ok(current_p) = current_p_str.parse::<u32>() {
+                                if current_p > deleted_p {
+                                    priority_prop.value = Some((current_p - 1).to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            prop.mods.sort_by_key(|entry| entry.properties.iter().find(|p| p.name == "ModPriority").and_then(|p| p.value.as_ref()).and_then(|v| v.parse::<u32>().ok()).unwrap_or(u32::MAX));
+            for (i, mod_entry) in prop.mods.iter_mut().enumerate() {
+                mod_entry.index = i.to_string();
+            }
+            break;
+        }
+    }
+
+    let unformatted_xml = to_string(&root).map_err(|e| format!("Failed to serialize XML data: {}", e))?;
+    let mut reader = Reader::from_str(&unformatted_xml);
+    reader.config_mut().trim_text(true);
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 2);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(event) => writer.write_event(event).unwrap(),
+            Err(e) => return Err(format!("XML formatting error: {:?}", e)),
+        }
+    }
+    let buf = writer.into_inner();
+    let xml_body = String::from_utf8(buf).map_err(|e| format!("Failed to convert formatted XML to string: {}", e))?;
+    
+    // --- THIS IS THE FIX ---
+    let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
+        .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
+        .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
+        .replace("\"/>", "\" />");
+
+    fs::write(&settings_file_path, &final_content)
+        .map_err(|e| format!("Failed to save updated GCMODSETTINGS.MXML: {}", e))?;
+
+    let mut mods_to_render_vec = Vec::new();
+    if let Some(prop) = root.properties.iter().find(|p| p.name == "Data") {
+        for mod_entry in &prop.mods {
+            if let Some(folder_name) = mod_entry.properties.iter().find(|p| p.name == "Name").and_then(|p| p.value.as_ref()) {
+                let enabled = mod_entry.properties.iter().find(|p| p.name == "Enabled").and_then(|p| p.value.as_deref()).unwrap_or("false").eq_ignore_ascii_case("true");
+                let priority = mod_entry.properties.iter().find(|p| p.name == "ModPriority").and_then(|p| p.value.as_ref()).and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+                let mod_info_path = game_path.join("GAMEDATA").join("MODS").join(folder_name).join("mod_info.json");
+                let local_info = if let Ok(content) = fs::read_to_string(&mod_info_path) {
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        Some(LocalModInfo {
+                            folder_name: folder_name.clone(),
+                            mod_id: json_val.get("modId").or(json_val.get("id")).and_then(|v| v.as_str()).map(String::from),
+                            file_id: json_val.get("fileId").and_then(|v| v.as_str()).map(String::from),
+                            version: json_val.get("version").and_then(|v| v.as_str()).map(String::from),
+                        })
+                    } else { None }
+                } else { None };
+                mods_to_render_vec.push(ModRenderData {
+                    folder_name: folder_name.clone(), enabled, priority, local_info,
+                });
+            }
+        }
+    }
+    
+    Ok(mods_to_render_vec)
+}
+
+#[tauri::command]
+fn reorder_mods(ordered_mod_names: Vec<String>) -> Result<String, String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let settings_file_path = game_path
+        .join("Binaries")
+        .join("SETTINGS")
+        .join("GCMODSETTINGS.MXML");
+
+    let xml_content = fs::read_to_string(&settings_file_path)
+        .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
+    let mut root: SettingsData =
+        from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
+
+    if let Some(prop) = root.properties.iter_mut().find(|p| p.name == "Data") {
+        let mut mods_map: HashMap<String, ModEntry> = prop
+            .mods
+            .drain(..)
+            .map(|entry| {
+                let name = entry
+                    .properties
+                    .iter()
+                    .find(|p| p.name == "Name")
+                    .and_then(|p| p.value.as_ref())
+                    .cloned()
+                    .unwrap_or_default();
+                (name, entry)
+            })
+            .collect();
+
+        let mut sorted_mods: Vec<ModEntry> = Vec::new();
+        for (new_priority, mod_name_upper) in ordered_mod_names
+            .iter()
+            .map(|n| n.to_uppercase())
+            .enumerate()
+        {
+            if let Some(mut mod_entry) = mods_map.remove(&mod_name_upper) {
+                let new_order_str = new_priority.to_string();
+                mod_entry.index = new_order_str.clone();
+                if let Some(priority_prop) = mod_entry
+                    .properties
+                    .iter_mut()
+                    .find(|p| p.name == "ModPriority")
+                {
+                    priority_prop.value = Some(new_order_str);
+                }
+                sorted_mods.push(mod_entry);
+            }
+        }
+
+        sorted_mods.extend(mods_map.into_values());
+        prop.mods = sorted_mods;
+    }
+
+    let unformatted_xml =
+        to_string(&root).map_err(|e| format!("Failed to serialize XML data: {}", e))?;
+
+    let mut reader = Reader::from_str(&unformatted_xml);
+    reader.config_mut().trim_text(true);
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 2);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(event) => writer.write_event(event).unwrap(),
+            Err(e) => return Err(format!("XML formatting error: {:?}", e)),
+        }
+    }
+    let buf = writer.into_inner();
+    let xml_body = String::from_utf8(buf)
+        .map_err(|e| format!("Failed to convert formatted XML to string: {}", e))?;
+
+    // --- THIS IS THE FIX ---
+    let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
+        .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
+        .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
+        .replace("\"/>", "\" />");
+
+    Ok(final_content)
+}
+
+#[tauri::command]
+fn update_mod_name_in_xml(old_name: String, new_name: String) -> Result<String, String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let settings_file_path = game_path
+        .join("Binaries")
+        .join("SETTINGS")
+        .join("GCMODSETTINGS.MXML");
+
+    let xml_content = fs::read_to_string(&settings_file_path)
+        .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
+    let mut root: SettingsData =
+        from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
+
+    let mut mod_found = false;
+    for prop in root.properties.iter_mut() {
+        if prop.name == "Data" {
+            if let Some(mod_entry) = prop.mods.iter_mut().find(|entry| {
+                if let Some(name_prop) = entry.properties.iter().find(|p| p.name == "Name") {
+                    name_prop.value.as_deref() == Some(&old_name)
+                } else {
+                    false
+                }
+            }) {
+                if let Some(name_prop) = mod_entry.properties.iter_mut().find(|p| p.name == "Name")
+                {
+                    name_prop.value = Some(new_name.to_uppercase());
+                    mod_found = true;
+                }
+            }
+            break;
+        }
+    }
+
+    if !mod_found {
+        return Err(format!(
+            "Could not find a mod entry with the name '{}' in the XML file.",
+            old_name
+        ));
+    }
+
+    let unformatted_xml =
+        to_string(&root).map_err(|e| format!("Failed to serialize XML data: {}", e))?;
+
+    let mut reader = Reader::from_str(&unformatted_xml);
+    reader.config_mut().trim_text(true);
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 2);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(event) => writer.write_event(event).unwrap(),
+            Err(e) => return Err(format!("XML formatting error: {:?}", e)),
+        }
+    }
+    let buf = writer.into_inner();
+    let xml_body = String::from_utf8(buf)
+        .map_err(|e| format!("Failed to convert formatted XML to string: {}", e))?;
+    
+    // --- THIS IS THE FIX ---
+    let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
+        .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
+        .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
+        .replace("\"/>", "\" />");
+    
+    Ok(final_content)
+}
+
+#[tauri::command]
+fn update_mod_id_in_json(mod_folder_name: String, new_mod_id: String) -> Result<(), String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let mod_info_path = game_path
+        .join("GAMEDATA")
+        .join("MODS")
+        .join(&mod_folder_name)
+        .join("mod_info.json");
+
+    if !mod_info_path.exists() {
+        return Err(format!(
+            "mod_info.json not found for mod '{}'.",
+            mod_folder_name
+        ));
+    }
+
+    let content = fs::read_to_string(&mod_info_path)
+        .map_err(|e| format!("Failed to read mod_info.json: {}", e))?;
+
+    let mut json_value: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse mod_info.json: {}", e))?;
+
+    if let Some(obj) = json_value.as_object_mut() {
+        obj.insert("id".to_string(), Value::String(new_mod_id));
+    } else {
+        return Err("mod_info.json is not a valid JSON object.".to_string());
+    }
+
+    let new_content = serde_json::to_string_pretty(&json_value)
+        .map_err(|e| format!("Failed to serialize updated JSON: {}", e))?;
+
+    fs::write(&mod_info_path, new_content)
+        .map_err(|e| format!("Failed to write updated mod_info.json: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn ensure_mod_info(
+    mod_folder_name: String,
+    mod_id: String,
+    file_id: String,
+    version: String,
+) -> Result<(), String> {
+    let game_path =
+        find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
+    let mod_info_path = game_path
+        .join("GAMEDATA")
+        .join("MODS")
+        .join(&mod_folder_name)
+        .join("mod_info.json");
+
+    let mut json_value: Value;
+
+    if mod_info_path.exists() {
+        let content = fs::read_to_string(&mod_info_path).map_err(|e| e.to_string())?;
+        json_value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    } else {
+        json_value = serde_json::json!({});
+    }
+
+    if let Some(obj) = json_value.as_object_mut() {
+        obj.insert("modId".to_string(), Value::String(mod_id));
+        obj.insert("fileId".to_string(), Value::String(file_id));
+        obj.insert("version".to_string(), Value::String(version));
+    } else {
+        return Err("mod_info.json is not a valid JSON object.".to_string());
+    }
+
+    let new_content = serde_json::to_string_pretty(&json_value).map_err(|e| e.to_string())?;
+    fs::write(&mod_info_path, new_content).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+
+#[tauri::command]
+async fn download_and_install_mod(
+    download_url: String,
+    file_name: String,
+) -> Result<InstallationAnalysis, String> {
+    let response = reqwest::get(&download_url)
+        .await
+        .map_err(|e| format!("Failed to start download: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
+    }
+
+    let file_bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read downloaded file bytes: {}", e))?;
+
+    let temp_dir = env::temp_dir();
+    let temp_archive_path = temp_dir.join(&file_name);
+    fs::write(&temp_archive_path, &file_bytes)
+        .map_err(|e| format!("Failed to write temporary archive: {}", e))?;
+
+    let result = install_mod_from_archive(temp_archive_path.to_string_lossy().to_string());
+
+    fs::remove_file(&temp_archive_path).ok();
+
+    result
+}
+
+#[tauri::command]
+fn get_nexus_api_key() -> Result<String, String> {
+    dotenvy::dotenv().ok();
+    match env::var("NEXUS_API_KEY") {
+        Ok(key) => {
+            println!("Successfully loaded NEXUS_API_KEY.");
+            Ok(key)
+        }
+        Err(_) => {
+            eprintln!("ERROR: NEXUS_API_KEY not found in .env file or environment.");
+            Err("NEXUS_API_KEY not found in .env file".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn check_mod_exists(mod_folder_name: String) -> bool {
+    if let Some(game_path) = find_game_path() {
+        let mod_path = game_path
+            .join("GAMEDATA")
+            .join("MODS")
+            .join(mod_folder_name);
+        return mod_path.exists();
+    }
+    false
+}
+
+#[tauri::command]
+fn unregister_nxm_protocol() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        // THIS IS THE FIX: We target HKEY_CURRENT_USER for deletion
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        hkcu.delete_subkey_all("Software\\Classes\\nxm").map_err(|e| e.to_string())?;
+        println!("Successfully unregistered nxm:// protocol handler from current user.");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn is_protocol_handler_registered() -> bool {
+    #[cfg(windows)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_path_str) = exe_path.to_str() {
+                let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
+                if let Ok(command_key) = hkcr.open_subkey("nxm\\shell\\open\\command") {
+                    if let Ok(command_val) = command_key.get_value::<String, _>("") {
+                        return command_val.contains(exe_path_str);
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn register_nxm_protocol() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe_path_str = exe_path.to_string_lossy();
+        let command = format!("\"{}\" \"%1\"", exe_path_str);
+
+        // THIS IS THE FIX: We now start from HKEY_CURRENT_USER
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (nxm_key, _) = hkcu.create_subkey("Software\\Classes\\nxm").map_err(|e| e.to_string())?;
+
+        nxm_key.set_value("", &"URL:NXM Protocol").map_err(|e| e.to_string())?;
+        nxm_key.set_value("URL Protocol", &"").map_err(|e| e.to_string())?;
+
+        let (command_key, _) = nxm_key
+            .create_subkey_with_flags("shell\\open\\command", KEY_WRITE)
+            .map_err(|e| e.to_string())?;
+        command_key.set_value("", &command).map_err(|e| e.to_string())?;
+
+        println!("Successfully registered nxm:// protocol handler to current user.");
+    }
+    Ok(())
+}
+
+// --- MAIN FUNCTION ---
+fn main() {    
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            println!("New instance detected, args: {:?}", argv);
+
+            if let Some(nxm_link) = argv.iter().find(|arg| arg.starts_with("nxm://")) {
+                app.emit("nxm-link-received", nxm_link.clone()).unwrap();
+            }
+
+            if let Some(window) = app.get_webview_window("main") {
+                window.unminimize().unwrap();
+                window.set_focus().unwrap();
+            }
+        }))
+        .setup(|app| {
+            let app_handle = app.handle();
+            let args: Vec<String> = std::env::args().collect();
+
+            if let Some(nxm_link) = args.iter().find(|arg| arg.starts_with("nxm://")) {
+                println!("NXM link found on startup: {}", nxm_link);
+                app_handle
+                    .emit("nxm-link-received", nxm_link.clone())
+                    .unwrap();
+            }
+
+            let window = app.get_webview_window("main").unwrap();
+            let state_file_path = get_state_file_path();
+            if let Ok(state_json) = fs::read_to_string(state_file_path) {
+                if let Ok(state) = serde_json::from_str::<WindowState>(&state_json) {
+                    window
+                        .set_position(PhysicalPosition::new(state.x, state.y))
+                        .unwrap();
+
+                    if state.maximized {
+                        window.maximize().unwrap();
+                    }
+                }
+            }
+            window.show().unwrap();
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::Resized(_)
+                | tauri::WindowEvent::Moved(_)
+                | tauri::WindowEvent::CloseRequested { .. } => {
+                    let is_maximized = window.is_maximized().unwrap_or(false);
+
+                    if !is_maximized {
+                        let position = window.outer_position().unwrap();
+                        let state = WindowState {
+                            x: position.x,
+                            y: position.y,
+                            maximized: false,
+                        };
+                        if let Ok(state_json) = serde_json::to_string(&state) {
+                            fs::write(get_state_file_path(), state_json).ok();
+                        }
+                    } else {
+                        let state_file_path = get_state_file_path();
+                        if let Ok(state_json) = fs::read_to_string(&state_file_path) {
+                            if let Ok(mut state) = serde_json::from_str::<WindowState>(&state_json) {
+                                state.maximized = true;
+                                if let Ok(new_state_json) = serde_json::to_string(&state) {
+                                    fs::write(state_file_path, new_state_json).ok();
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_game_path,
+            open_mods_folder,
+            save_file,
+            delete_settings_file,
+            reorder_mods,
+            install_mod_from_archive,
+            resolve_conflict,
+            finalize_mod_installation,
+            cleanup_temp_folder,
+            resize_window,
+            delete_mod,
+            update_mod_name_in_xml,
+            update_mod_id_in_json,
+            ensure_mod_info,
+            get_nexus_api_key,
+            download_and_install_mod,
+            register_nxm_protocol,
+            unregister_nxm_protocol,
+            is_protocol_handler_registered,
+            check_mod_exists,
+            get_all_mods_for_render
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

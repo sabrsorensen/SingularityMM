@@ -1,0 +1,1886 @@
+/* ==========================================================================
+   1. Font Definitions & Global Variables
+   ========================================================================== */
+
+@font-face {
+    font-family: 'NMSGeoSans';
+    src: url('/src/fonts/NMSGeoSans_Kerned.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Roboto';
+    src: url('/src/fonts/Roboto-Light.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+:root {
+	--accent-color: #f1e8d1;
+	--hover-color: #007ACC;
+	--text-color: #EAEAEA;
+	--danger-color: #F34C42;
+	--danger-hover-color: #C9302C;
+    --font-primary: 'NMSGeoSans', sans-serif;
+    --font-secondary: 'Roboto', sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+body {
+	background-image: url('assets/background.png');
+	background-position: center;
+	background-repeat: no-repeat;
+	background-size: auto 100%; 
+	color: var(--text-color);
+	display: flex;
+	flex-direction: column;
+	font-family: var(--font-secondary);
+	height: 100vh;
+	margin: 0;
+	overflow: hidden;
+}
+@media (min-aspect-ratio: 2/1) {
+    body {
+        background-size: cover;
+    }
+}
+
+/* ==========================================================================
+   2. Custom Header & Language Selector
+   ========================================================================== */
+
+header {
+    position: relative; 
+    height: 60px;
+    flex-shrink: 0;
+}
+
+.header-content-wrapper {
+    position: relative; /* Establishes a positioning context for its children */
+    width: 900px;       /* Matches your DEFAULT_WIDTH */
+    height: 100%;
+    pointer-events: none;
+}
+
+#banner-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: auto;
+    -webkit-user-drag: none; 
+    pointer-events: none;
+}
+
+.header-controls-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    -webkit-app-region: no-drag; /* The container itself is not draggable */
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.header-controls-right > img {
+    height: 28px;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, filter 0.2s;
+}
+
+.header-controls-right > img:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+}
+
+.header-content-wrapper > *,
+.header-controls-right > * {
+    pointer-events: auto;
+}
+
+/* --- ADD THESE NEW RULES FOR THE TEXT BUTTON --- */
+.header-button {
+    display: flex; /* Aligns the icon and text horizontally */
+    align-items: center;
+    gap: 8px; /* Space between the icon and text */
+    padding: 3px 4px; /* Give it some nice padding */
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 0px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.header-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent-color);
+}
+
+.header-button img {
+    height: 20px; /* Make the icon inside the button a bit smaller */
+}
+
+.header-button .button-text {
+    font-size: 11pt;
+    font-family: var(--font-primary);
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.header-button:hover .button-text {
+    opacity: 1;
+}
+
+/* Rule to disable the button */
+.header-button.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.language-selector-container {
+	bottom: 4px;
+	right: 15px;
+	position: fixed; 
+	z-index: 1000;   
+}
+
+/* #languageSelector {
+	background-color: #3C3C3C;
+	border: 1px solid #555;
+	border-radius: 4px;
+	color: var(--text-color);
+	font-size: 12px;
+	padding: 2px 4px;
+} */
+
+
+/* ==========================================================================
+   3. Main Layout & Panels
+   ========================================================================== */
+
+.main-content {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	padding: 0 15px 15px 15px;
+}
+
+.top-panel {
+	backdrop-filter: blur(1px);
+	background-color: rgba(107, 36, 62, 0);
+	border: 0px solid rgba(255, 255, 255, 0.2);
+	border-radius: 0px;
+	-webkit-backdrop-filter: blur(1px);
+  margin-bottom: 15px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 30px;
+  margin-left: -15px;  /* Counteract the parent's left padding */
+  margin-right: -15px; /* Counteract the parent's right padding */
+  padding: 15px 15px 15px 0;
+}
+
+.list-panel {
+	backdrop-filter: blur(1px);
+	background-color: rgba(107, 36, 62, 0.1);
+	border: 0px solid rgba(255, 255, 255, 0.1);
+	border-radius: 0px;
+	-webkit-backdrop-filter: blur(1px);
+  display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+  margin-left: -10px;  /* Counteract the parent's left padding */
+  margin-right: -10px; /* Counteract the parent's right padding */
+  margin-bottom: 15px;
+  margin-top: -10px;
+  padding: 10px 10px 0px 10px;
+}
+
+/* ==========================================================================
+   4. UI Components
+   ========================================================================== */
+
+h3,
+.header-row span {
+    font-family: var(--font-primary);
+}
+
+/* --- Settings Columns --- */
+
+.settings-column-left {
+    position: relative;
+    flex-grow: 1;
+    height: 140px; /* Match the height of .actions-column-right */
+}
+
+.settings-container {
+    position: absolute;
+    width: 100%;
+}
+
+/* --- Left Side Element Movement Stuff --- */
+
+/* Tweak position of the entire Global Settings block */
+#globalSettingsContainer {
+    top: 0;
+    left: 0;
+}
+
+/* Tweak position of the entire Individual Mod Settings block */
+#individualSettingsContainer {
+    top: 80px;
+    left: 0;
+}
+
+/* --- Positioning within Global Settings --- */
+/* --- Banner Image Positioning --- */
+#globalBanner {
+    background-position: 0px 0px;
+}
+
+#disableAllContainer {
+    position: absolute;
+    top: 40px; 
+    left: 15px;
+}
+
+/* --- Positioning within Individual Mod Settings --- */
+#individualBanner {
+    background-position: 0px 0px;
+}
+
+/* --- Banner Text Positioning --- */
+#globalBanner .banner-text {
+    left: 10px; /* Tweak this to move "GLOBAL SETTINGS" text */
+}
+
+#individualBanner .banner-text {
+    left: 10px; /* Tweak this to move "INDIVIDUAL MOD SETTINGS" text */
+}
+
+/* ==========================================================================
+   --- ACTION DIAMONDS ---
+   ========================================================================== */
+
+/* This is the positioning "canvas" for the two diamond buttons */
+.actions-column-right {
+    position: relative;
+    flex-shrink: 0;
+    /* Give it a size so its children have a space to live in */
+    width: 320px;
+    height: 140px;
+}
+
+/* Clickable icon area. Its size IS the click area. */
+.action-diamond {
+    position: absolute;
+    cursor: pointer;
+    width: 300px;
+    height: 60px;
+    /* This centers the clickable box on the visual icon's center */
+    transform: translate(-50%, -50%); 
+}
+
+/* VISUAL icon layer. It is NOT clickable. */
+.action-diamond::before {
+    content: '';
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: transform 0.2s, filter 0.2s;
+    pointer-events: none; 
+    /* This centers the large visual icon on top of the small clickable box */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.action-diamond:hover::before {
+    transform: translate(-50%, -50%) scale(1.05);
+    filter: brightness(1.2);
+}
+
+/* Shared styles for main and sub labels */
+.diamond-label, .diamond-sublabel {
+    position: absolute;
+    margin: 0;
+    white-space: nowrap;
+    /* This makes the labels unclickable, passing clicks to the diamond below */
+    pointer-events: none; 
+}
+
+/* The shared main text styles */
+.diamond-label {
+    font-family: var(--font-primary);
+    font-size: 13.5pt;
+}
+
+/* The shared sub-text styles */
+.diamond-sublabel {
+    font-size: 10.5pt;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+/* --- Right Side Element movement stuff --- */
+
+/* --- Button 1: Load GCMODSETTINGS --- */
+/* Tweak position of entire button */
+#loadFileBtn {
+    top: 58px;
+    left: 160px;
+}
+#loadFileBtn::before {
+    background-image: url('/src/assets/diamond-1.png');
+}
+/* Tweak these to move the MAIN TEXT */
+#loadFileBtn-label {
+    top: 27px;
+    left: 72px;
+}
+/* Tweak these to move the SUB-TEXT */
+#filePathLabel {
+    top: 55px;
+    left: 85px;
+}
+
+/* --- Button 2: Open MODS Folder --- */
+/* Tweak these to move and resize the clickable ICON */
+#openModsFolderBtn {
+    top: 115px;
+    left: 190px;
+}
+#openModsFolderBtn::before {
+    background-image: url('/src/assets/diamond-2.png');
+}
+/* Tweak these to move the MAIN TEXT */
+#openModsFolderBtn-label {
+    top: 110px;
+    left: 110px;
+}
+
+/* --- Global Settings Section --- */
+
+.settings-title-banner {
+    position: relative;
+    height: 35px;
+}
+
+.settings-title-banner::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    height: 100%;
+    left: 44px;  
+    right: 44px;
+    background-size: 100% 100%;
+    
+    z-index: 1; /* Sits on the bottom background layer */
+}
+
+.settings-title-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat, no-repeat;
+    background-position: left, right;
+    background-size: contain, contain; 
+    
+    z-index: 2; /* Sits on top of the middle layer */
+}
+
+.global-banner::after { /* Middle */
+    background-image: url('/src/assets/settings-banner-middle.png');
+}
+.global-banner::before { /* Caps (Left, then Right) */
+    background-image: url('/src/assets/settings-banner-left.png'), url('/src/assets/settings-banner-right.png');
+}
+
+.banner-text {
+    position: absolute;
+    z-index: 3; /* Sits on the very top layer */
+    top: 50%;
+    transform: translateY(-70%); /* Fine-tunes vertical alignment */
+    left: 20px; 
+
+    font-family: var(--font-primary);
+    font-size: 13.5pt;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.switch-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.switch-container > label {
+    font-size: 16px; 
+    white-space: nowrap;
+}
+
+.batch-actions-container {
+    position: absolute;
+    top: 40px;
+    left: 15px; 
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+}
+
+/* --- Themed Buttons --- */
+
+/* --- Checkbox-based buttons --- */
+.checkbox-button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* --- Mod List --- */
+
+.mod-list {
+	flex-grow: 1;
+	overflow-y: auto;
+}
+
+.header-row {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+	font-size: 13.5pt;
+	font-weight: bold;
+	margin-bottom: 5px;
+  margin-right: 12px;
+}
+
+.header-row,
+.mod-row {
+    align-items: center;
+    display: flex;
+    flex-shrink: 0;
+    /* Use a variable for the top/bottom padding. Default is 5px. */
+    padding: var(--mod-row-vertical-padding, 5px) 10px;
+}
+
+/* This is the new main container that will stretch */
+.mod-name-container {
+	flex-grow: 1;
+  display: flex; /* Aligns the text and indicator horizontally */
+  align-items: center; /* Vertically centers them */
+  min-width: 0; /* Important for preventing text overflow issues */
+}
+
+.header-row .mod-name {
+    flex-grow: 1; /* This makes the header's name column expand */
+}
+
+/* This is just for the text itself */
+.mod-name-text {
+    /* Truncate long mod names with an ellipsis */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.priority {
+    flex-shrink: 0;
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center; 
+    padding-right: 20px;
+}
+
+.header-row .priority {
+    white-space: nowrap;
+}
+
+.enabled {
+	flex-shrink: 0;
+	width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-row .enabled {
+    white-space: nowrap;
+}
+
+.mod-row {
+	background-color: rgba(60, 60, 60, 0.6);
+	border-radius: 4px;
+	margin-bottom: 4px;
+}
+
+.mod-row:nth-child(even) {
+	background-color: rgba(74, 74, 74, 0.6);
+}
+
+.mod-row input[type="text"] {
+	background-color: rgba(74, 74, 74, 0.9);
+	border: 1px solid var(--accent-color);
+	border-radius: 4px;
+	color: var(--text-color);
+	padding: 4px;
+	text-align: center;
+	width: 60px;
+    font-family: var(--font-primary);
+    font-size: 14px;
+}
+
+/* --- Manual Drag and Drop --- */
+
+/* This is the placeholder that reserves the space in the list */
+.placeholder {
+    background-color: rgba(241, 232, 209, 0.2);
+    border: 1px dashed var(--accent-color);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+/* This is the visual representation of the row you are dragging. */
+.ghost {
+    position: fixed; 
+    z-index: 5000;   
+    pointer-events: none;
+
+    opacity: 0.8;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* This class hides the original element in the list while its ghost is being dragged */
+.mod-row.is-dragging {
+    /* Don't remove it from the layout, just make it invisible and take up zero space. */
+    visibility: hidden !important;
+    height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-width: 0 !important;
+    overflow: hidden !important;
+}
+
+/* --- THEMED CHECKBOX --- */
+
+/* 1. The Label: This is now just an invisible anchor for positioning. */
+/* Its size dictates the space it takes up in the layout. */
+label.switch {
+    display: inline-block;
+    position: relative;
+    width: 24px;                /* A small footprint that fits the row. */
+    height: 24px;
+    cursor: pointer;
+    vertical-align: middle;
+    background: none !important; 
+}
+
+/* 2. The Pseudo-element: This is the large, VISUAL part the user sees. */
+/* It is taken OUT of the layout flow, so its size doesn't affect the row. */
+label.switch::before {
+    content: '';
+    position: absolute;
+
+    /* Center it on top of the small anchor label. */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    /* This is the VISUAL size. */
+    width: 50px;
+    height: 50px;
+
+    /* All visual styles are applied ONLY to the pseudo-element. */
+    background-image: url('/src/assets/checkbox-off.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    transition: filter 0.2s;
+}
+
+/* 3. The Hover Effect */
+.checkbox-button:hover label.switch::before {
+    filter: brightness(1.2);
+}
+
+/* 4. The Hidden Input */
+.switch input {
+	height: 0;
+	opacity: 0;
+	width: 0;
+}
+
+/* 5. The Checked State: Target the pseudo-element when the input is checked */
+label.switch:has(input:checked)::before {
+    background-image: url('/src/assets/checkbox-on.png');
+}
+
+/* --- Custom Search Bar Style --- */
+
+.search-bar-container {
+    margin-bottom: 5px; /* Adds space below the search bar */
+}
+
+#searchModsInput {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    
+    /* --- Colors and Fonts --- */
+    background-color: rgba(60, 60, 60, 0.3);
+    color: var(--text-color);
+    font-family: var(--font-secondary);
+    font-size: 14px;
+
+    /* --- Border and Shape --- */
+    border: 0px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 8px 12px; /* Give the text inside some space */
+    outline: none;     /* Remove the default blue focus outline */
+
+    /* --- Smooth Transition for Focus Effect --- */
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Style the placeholder text (e.g., "Search mods...") */
+#searchModsInput::placeholder {
+    color: var(--text-color);
+    opacity: 0.6; 
+}
+
+/* --- The Glow Effect on Focus --- */
+#searchModsInput:focus {
+    border-color: var(--accent-color);
+    /* Add a glow effect that matches the theme */
+    box-shadow: 0 0 8px 1px rgba(241, 232, 209, 0.7); 
+}
+
+/* --- Style for the selected mod row --- */
+.mod-row.selected {
+    /* Adds a subtle glow to the selected mod */
+    box-shadow: 0 0 8px 1px var(--accent-color);
+    border: 1px solid rgba(241, 232, 209, 0.7);
+}
+
+/* --- UPDATE INDICATOR IN MOD LIST --- */
+.update-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #FFD700; /* Same gold color as the "latest version" text */
+    border-radius: 50%; /* Makes it a circle */
+    margin-left: 10px;
+    
+    /* A subtle glow to make it stand out */
+    box-shadow: 0 0 6px 1px #FFD700;
+
+    /* A gentle pulsing animation to draw the eye */
+    animation: pulse 2s infinite;
+}
+
+/* Define the pulsing animation */
+@keyframes pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(255, 215, 0, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+    }
+}
+
+/* Ensure our .hidden utility class works on it */
+.update-indicator.hidden {
+    display: none;
+}
+
+/* --- NEW INLINE MOD INFO PANEL --- */
+.mod-info-panel-inline {
+    background-color: rgba(45, 38, 58, 0.85); /* Slightly tweaked for style */
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    margin: 0 0 4px 0;
+    overflow: hidden;
+    backdrop-filter: blur(2px);
+
+    /* Animation for expanding/collapsing */
+    transition: all 0.4s ease-in-out;
+    max-height: 0;
+    padding: 0 20px; /* Animate horizontal padding */
+    border-width: 0 1px;
+    opacity: 0;
+}
+
+.mod-info-panel-inline:not(.hidden) {
+    max-height: 500px; /* Animate to a large height */
+    padding-top: 15px;
+    padding-bottom: 15px;
+    margin-top: 10px;
+    border-width: 1px;
+    opacity: 1;
+}
+
+.info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-primary);
+    font-size: 15pt;
+    color: var(--accent-color);
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* --- ADD THIS NEW RULE FOR THE BUTTON --- */
+.nexus-button {
+    height: 24px; /* Adjust size as needed */
+    width: 24px;
+    opacity: 0.7;
+    transition: all 0.2s;
+}
+
+.nexus-button:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.nexus-button.hidden {
+    display: none;
+}
+
+.nexus-button img {
+    height: 100%;
+    width: 100%;
+}
+
+/* --- NEW Two-Column Body Layout --- */
+.info-body {
+    display: flex;
+    margin-top: 12px;
+    gap: 20px; /* Space between columns */
+}
+
+.info-meta-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    width: 200px; /* Give it a fixed width */
+}
+
+.info-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.info-label {
+    font-family: var(--font-primary);
+    font-size: 10pt;
+    opacity: 0.6;
+}
+
+.info-value {
+    font-size: 12pt;
+    text-align: right;
+}
+
+#infoLatestVersion.update-available {
+    color: #FFD700; /* Gold color for update notification */
+    font-weight: bold;
+}
+
+/* --- Vertical Divider --- */
+.info-divider {
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+}
+
+/* --- Column 2: Description --- */
+.info-description-column {
+    flex-grow: 1; /* Allow description to take up remaining space */
+    min-width: 0; /* Important for flexbox text wrapping */
+}
+
+.info-description-column .info-label {
+    margin-bottom: 6px;
+    display: block; /* Make the "Description" label a block */
+}
+
+.info-description {
+    margin: 0;
+    font-size: 11pt;
+    opacity: 0.8;
+    line-height: 1.4;
+    /* Allow long descriptions to wrap */
+    word-wrap: break-word;
+}
+
+/* --- Scrollbar & Drop Zone & Modal --- */
+
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-clip: content-box;
+    background-color: #6E6E6E;
+    border: 2px solid transparent;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: #888888;
+}
+
+/* New styles for the image-based drop zone */
+.drop-zone {
+    background-image: url('/src/assets/dropzone.png');
+    background-size: 100% 100%; /* Stretch the image to fill the div */
+    background-position: center;
+    background-repeat: no-repeat;
+
+    /* --- Remove the old visual styles --- */
+    border: none; 
+    background-color: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+
+    /* --- These lines center the text on top of the image --- */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 10px;
+    height: 105px; /* height */
+    color: #EAEAEA;
+    font-size: 14pt;
+    font-weight: bold;
+    font-family: var(--font-primary);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    transition: filter 0.2s;
+    padding: 0px 2px 0px 0px;
+}
+
+.drop-zone.drag-over {
+    filter: brightness(1.3);
+}
+
+.modal-overlay {
+	align-items: center;
+	backdrop-filter: blur(5px);
+	background-color: rgba(0, 0, 0, 0.7);
+	display: flex;
+	height: 100%;
+	justify-content: center;
+	left: 0;
+	position: fixed;
+	top: 0;
+	width: 100%;
+	z-index: 2000;
+}
+
+.modal-content {
+	background-color: rgba(60, 60, 60, 0.9);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	max-width: 400px;
+	padding: 25px;
+	text-align: center;
+	width: 90%;
+}
+
+.modal-content h2 {
+	margin-top: 0;
+}
+
+.modal-actions {
+	display: flex;
+	gap: 15px;
+	justify-content: center;
+	margin-top: 20px;
+}
+
+/* --- UPDATE MODAL STYLES --- */
+.update-modal {
+    max-width: 600px; /* A wider modal for the list */
+    text-align: left;
+    font-family: var(--font-primary);
+}
+
+.update-list-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    max-height: 400px; /* Limit the height and allow scrolling */
+    overflow-y: auto;
+    /* Add some padding on the right to make space for the scrollbar */
+    padding-right: 10px;
+}
+
+.update-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+    margin-bottom: 8px;
+}
+
+.update-item-info {
+    flex-grow: 1;
+}
+
+.update-item-name {
+    font-size: 13pt;
+    font-family: var(--font-primary);
+    color: var(--accent-color);
+}
+
+.update-item-version {
+    font-size: 11pt;
+    opacity: 0.8;
+}
+
+.update-item-version .arrow {
+    color: var(--accent-color);
+    margin: 0 8px;
+}
+
+.update-item-version .latest {
+    color: #FFD700; /* Gold color for the new version */
+    font-weight: bold;
+}
+
+.update-item .nexus-button {
+    flex-shrink: 0;
+    margin-left: 15px;
+}
+
+/* === DOWNLOAD HISTORY MODAL STYLES === */
+.download-modal {
+    max-width: 700px; /* A nice wide modal */
+    text-align: left;
+    font-family: var(--font-primary);
+}
+
+.download-list-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    max-height: 400px; /* Limit height and allow scrolling */
+    overflow-y: auto;
+    padding-right: 10px;
+    display: flex;
+    flex-direction: column-reverse; /* This makes new items appear at the top! */
+}
+
+.download-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+    margin-bottom: 8px;
+}
+
+.download-item-info {
+    flex-grow: 1;
+}
+
+.download-item-name {
+    font-size: 13pt;
+    font-family: var(--font-primary);
+    color: var(--accent-color);
+}
+
+.download-item-status {
+    font-size: 11pt;
+    font-family: var(--font-secondary);
+    opacity: 0.8;
+    margin-top: 4px;
+    transition: color 0.3s;
+}
+
+/* Status-specific coloring */
+.download-item-status.status-progress {
+    color: #e0e0e0; /* Neutral/in-progress color */
+}
+.download-item-status.status-success {
+    color: #4CAF50; /* Green for success */
+    font-weight: bold;
+}
+.download-item-status.status-error {
+    color: var(--danger-color); /* Red for error */
+    font-weight: bold;
+}
+
+/* Add this new rule for the 'removed' status */
+.download-item-status.status-removed {
+    color: #9E9E9E; /* A neutral grey color */
+    font-style: italic;
+}
+
+/* --- SETTINGS MODAL STYLES --- */
+.settings-modal {
+    /* Set the default font for all text inside the modal */
+    font-family: var(--font-secondary);
+}
+
+.settings-modal h2,
+.settings-modal h3 {
+    /* Apply the primary font to both the main title and the section title */
+    font-family: var(--font-primary);
+}
+
+.settings-modal button,
+.settings-modal select {
+    /* Explicitly set the font for buttons and select dropdowns */
+    font-family: var(--font-secondary);
+}
+
+.settings-modal {
+    max-width: 500px;
+    text-align: left;
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 0px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-row label {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#rowPaddingValue {
+    font-size: 14px;
+    color: var(--accent-color);
+    width: 40px; /* Give it a fixed width to prevent layout shifts */
+    text-align: right;
+}
+
+.troubleshoot-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+}
+
+.troubleshoot-section h3 {
+    margin-top: 0;
+}
+
+.troubleshoot-section p {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+/* ==========================================================================
+   5. Context Menu
+   ========================================================================== */
+.context-menu {
+    background-color: rgba(35, 35, 35, 0.95);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border-radius: 6px;
+    filter: drop-shadow(1px 1px 7px black);
+    min-width: 150px;
+    padding: 0px 0;
+    position: fixed;
+    z-index: 4000;
+    user-select: none;
+}
+
+button.context-menu-item {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-color);
+    cursor: pointer;
+    display: block;
+    font-size: 14px; 
+    font-weight: normal;
+    padding: 8px 15px;
+    text-align: left; 
+    transition: background-color 0.1s ease-in-out;
+    width: 100%;
+}
+
+button.context-menu-item:hover {
+    background-color: rgba(125, 33, 88, 1);
+    color: white;
+}
+
+button.context-menu-item.delete {
+    color: var(--text-color);
+}
+
+button.context-menu-item.delete:hover {
+    background-color: var(--danger-hover-color);
+    color: white;
+}
+
+/* === FIX FOR NEW VIEW LAYOUT === */
+#myModsView, #browseView {
+    display: flex;          /* Makes it a flex container */
+    flex-direction: column; /* Stacks its children (panels, grids) vertically */
+    flex-grow: 1;           /* Makes the active view expand to fill all available space */
+    min-height: 0;          /* A crucial flexbox fix that allows child elements to scroll correctly */
+}
+
+/* === UNIFIED STYLED DROPDOWN === */
+.styled-select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-width: 170px;
+    
+    padding-right: 30px; /* Add space for the custom arrow */
+
+    /* Custom Arrow SVG */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23EAEAEA' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 1em;
+}
+
+.styled-select:hover {
+    border-color: var(--accent-color);
+}
+
+/* Style for the dropdown options list */
+.styled-select option {
+    background-color: #2a2a2a;
+    color: var(--text-color);
+}
+
+/* --- Main Navigation (Tabs) --- */
+.main-nav {
+    /* These properties make the nav clickable in a draggable region */
+    -webkit-app-region: no-drag;
+    
+    /* These properties center the element in the header */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    /* These are your existing properties, just without the old margin */
+    display: flex;
+    justify-content: center;
+}
+.nav-button {
+    font-family: var(--font-primary);
+    font-size: 14pt;
+    color: var(--text-color);
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 30px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    opacity: 0.6;
+}
+.nav-button:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-right-width: 0.5px;
+}
+.nav-button:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-left-width: 0.5px;
+}
+.nav-button.active {
+    background-color: rgba(241, 232, 209, 0.15);
+    border-color: var(--accent-color);
+    opacity: 1;
+    text-shadow: 0 0 5px var(--accent-color);
+}
+.nav-button:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.1);
+    opacity: 0.9;
+}
+
+/* --- Browse Tab Layout --- */
+.browse-controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+.themed-input {
+    font-family: var(--font-secondary);
+    color: var(--text-color);
+    font-size: 14px;
+    padding: 8px 12px;
+    
+    background-color: rgba(60, 60, 60, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.themed-input:hover {
+    border-color: var(--accent-color);
+}
+#browseSearchInput {
+    flex-grow: 1;
+}
+#browseSearchInput:hover,
+.styled-select:hover {
+    border-color: var(--accent-color);
+}
+.browse-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    flex-grow: 1; /* This is the fix: tells the grid to take up all available space */
+    min-height: 0; /* A crucial flexbox fix that enables proper scrolling */
+    padding-right: 10px;
+    padding-top: 5px;
+}
+
+/* --- Mod Card Styles --- */
+.mod-card {
+    background-color: rgba(60, 60, 60, 0.6);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row; /* Lay out image and body horizontally */
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    flex-shrink: 0; /* Prevent cards from shrinking */
+}
+
+.mod-card-summary.warning-text {
+    color: #FFD700; /* Gold/yellow color */
+    font-weight: bold;
+    opacity: 0.9;
+}
+
+.mod-card:hover {
+    border-color: var(--accent-color);
+    /* transform: translateY(-2px); */
+}
+
+.mod-card-version-inline {
+    font-size: 11pt;
+    opacity: 0.6;
+    margin-left: 8px; /* Space between title and version */
+    font-family: var(--font-secondary); /* Use the standard text font */
+}
+
+/* --- ADD THIS NEW RULE --- */
+.mod-card.has-warning .mod-card-title {
+    color: #FFD700; /* A gold/yellow color for the title text */
+}
+.mod-card-title .warning-icon {
+    cursor: help; /* Changes the cursor to a question mark to indicate a tooltip */
+}
+.mod-card-thumbnail {
+    width: 106px; /* Set width equal to height */
+    height: 106px; /* This creates the square */
+    object-fit: cover; /* This crops and centers the image */
+    background-color: #222;
+    flex-shrink: 0;
+}
+.mod-card-body {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 5px; /* Reduced from 10px to tighten the layout */
+    min-width: 0;
+}
+.mod-card-title {
+    font-family: var(--font-primary);
+    font-size: 14pt;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 20px;
+    align-items: center;
+    display: flex;
+}
+.mod-card-author {
+    font-size: 10pt;
+    opacity: 0.7;
+    margin: 0;
+}
+.mod-card-stats {
+    display: flex;
+    gap: 20px; /* This adds a nice space between the two stats */
+    font-size: 10pt;
+    opacity: 0.8;
+    margin-top: auto; /* This keeps the stats at the bottom of the card */
+}
+.mod-card-stats span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    /* By removing 'flex-basis', the spans will now only be as wide as their content */
+}
+.mod-card-stats img {
+    height: 12px;
+    opacity: 0.6;
+}
+.mod-card-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--text-color);
+    opacity: 0.7;
+}
+.mod-card-summary {
+    font-size: 14px;
+    opacity: 0.6;
+    margin: 0;
+    line-height: 1.4;
+
+    /* NEW single-line truncation logic */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mod-card-install-btn {
+    font-family: var(--font-primary);
+    background-color: var(--accent-color);
+    color: #222;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
+    /* Remove margin as the parent's `gap` will handle it */
+    margin-top: 0; 
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.mod-card-install-btn:hover {
+    background-color: white;
+}
+.mod-card-install-btn:disabled {
+    background-color: #555;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   6. Mod Detail Panel
+   ========================================================================== */
+
+/* --- NEW Styling for Mod Detail Meta Section --- */
+.mod-detail-meta {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Space between each line of info */
+    font-size: 11pt;
+}
+
+.meta-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.meta-label {
+    opacity: 0.6;
+    font-size: 10pt;
+    text-transform: uppercase;
+}
+
+.meta-value {
+    text-align: right;
+}
+   
+/* --- NEW Side-by-Side Browse Layout --- */
+.browse-container {
+    display: flex;
+    flex-grow: 1;
+    min-height: 0; /* Flexbox fix for scrolling */
+}
+
+.browse-main-content {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0; /* Prevents content from overflowing */
+}
+
+.mod-detail-content-wrapper {
+    width: 700px; /* This is the fixed width of your panel content */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0; /* Prevent this wrapper from shrinking */
+}
+
+.mod-detail-panel {
+    background-color: rgba(30, 25, 40, 0.95);
+    border-left: 0px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    
+    /* THE FIX: Use a transition-delay on visibility */
+    width: 0;
+    visibility: hidden; /* Start completely invisible */
+    transform: translateX(100%);
+}
+
+.mod-detail-panel.open {
+    width: 700px;
+    visibility: visible;
+    transform: translateX(0%);
+    transition: transform 0.25s ease-out; /* ONLY animate when the 'open' class is added */
+}
+
+.mod-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+}
+
+.mod-detail-header h2 {
+    font-family: var(--font-primary);
+    margin: 0;
+    font-size: 18pt;
+    color: var(--accent-color);
+}
+
+.mod-detail-header img {
+    height: 24px;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: all 0.2s;
+}
+.mod-detail-header img:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.mod-detail-body {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.mod-detail-left {
+    flex-basis: 150px;
+    flex-shrink: 0;
+    display: flex;         /* Use flexbox for vertical layout */
+    flex-direction: column;
+}
+.mod-detail-image {
+    width: 100%;
+    aspect-ratio: 1 / 1; /* This forces the element to be a perfect square */
+    object-fit: cover;   /* This crops and centers the image within the square */
+    border-radius: 4px;
+    background-color: #222;
+}
+
+.mod-detail-right {
+    flex-grow: 1;
+}
+
+.mod-detail-author {
+    margin: 0 0 15px 0;
+    font-size: 12pt;
+    opacity: 0.8;
+}
+
+.mod-detail-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+    font-size: 11pt;
+    background-color: rgba(0,0,0,0.2);
+    padding: 15px;
+    border-radius: 4px;
+}
+.mod-detail-stats strong {
+    opacity: 0.7;
+}
+
+.mod-detail-description {
+    margin: 0;
+    line-height: 1.5;
+    opacity: 0.9;
+    overflow-wrap: break-word;
+    font-family: var(--font-secondary); /* <-- FIX: Use Roboto for all description text */
+}
+
+.mod-detail-description > * {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.mod-detail-description > * + * {
+    margin-top: 2em; /* Use 'em' for spacing relative to the font size */
+}
+
+.mod-detail-description br {
+    margin: 0;
+    display: block; /* Required to apply margin, but we set it to 0 */
+    content: "";
+}
+
+.mod-detail-actions {
+    margin-top: 20px;
+}
+
+/* --- NEW Styling for Mod Detail Footer --- */
+.mod-detail-footer {
+    padding: 15px;
+    margin-top: auto; /* This pushes the footer to the bottom */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Re-use and adapt your existing modal button style */
+.mod-detail-footer .modal-btn-cancel {
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: var(--text-color);
+    padding: 8px 30px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.mod-detail-footer .modal-btn-cancel:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-color);
+}
+
+/* --- NEW Styling for Injected Description Content --- */
+.mod-detail-description h1,
+.mod-detail-description h2,
+.mod-detail-description h3 {
+    font-family: var(--font-primary); /* Headings can still use the display font */
+    color: var(--accent-color);
+    font-size: 14pt;
+}
+
+.mod-detail-description strong,
+.mod-detail-description b {
+    color: var(--accent-color);
+    font-weight: 700; /* Use a heavier font-weight for Roboto */
+}
+
+.mod-detail-description ul,
+.mod-detail-description ol {
+    padding-left: 25px;
+}
+
+.mod-detail-description li {
+    margin-bottom: 0.5em; /* Reduce space between list items */
+}
+.mod-detail-description li:last-child {
+    margin-bottom: 0;
+}
+
+.mod-detail-description blockquote {
+    border-left: 3px solid var(--accent-color);
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 10px 15px;
+    border-radius: 4px;
+}
+
+/* Style for multi-line code blocks */
+.mod-detail-description pre {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 15px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Style for inline <code> tags that are NOT in a <pre> block */
+.mod-detail-description :not(pre) > code {
+    font-family: monospace;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* THIS IS THE FIX: Remove the background and padding from <code>
+   tags when they ARE inside a <pre> block. */
+.mod-detail-description pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+/* --- NEW Styling for Links --- */
+.mod-detail-description a {
+    color: var(--accent-color); /* Use your theme's accent color for links */
+    text-decoration: none;      /* Remove the underline */
+}
+
+.mod-detail-description a:hover {
+    text-decoration: underline; /* Add the underline back on hover for good UX */
+}
+
+/* --- NEW Styling for Alignment and Images --- */
+.mod-detail-description .bbcode-center {
+    text-align: center;
+}
+
+.mod-detail-description .bbcode-img {
+    max-width: 100%; /* Ensure images don't overflow the panel */
+    border-radius: 4px;
+    margin: 10px 0; /* Add some vertical space around images */
+}
+
+/* ==========================================================================
+   7. File Selection Modal Layout
+   ========================================================================== */
+/* --- File Selection Modal --- */
+.file-selection-modal {
+    max-width: 700px;
+    text-align: left;
+}
+
+   .file-selection-modal .update-list-container {
+    padding-right: 0; /* Remove padding now that we have sections */
+}
+
+/* Style for the standout "Main File" */
+.primary-file-container {
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    margin-bottom: 15px;
+    background-color: rgba(241, 232, 209, 0.05);
+}
+
+.primary-file-container .update-item-name {
+    font-size: 14pt; /* Make the main file name larger */
+}
+
+/* Styles for the collapsible sections */
+.collapsible-header {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-primary);
+    font-size: 13pt;
+    position: relative;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Arrow indicator for the header */
+.collapsible-header::after {
+    content: '▶';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%) scale(0.8);
+    transition: transform 0.3s ease-in-out;
+    opacity: 0.7;
+}
+
+.collapsible-header.active::after {
+    transform: translateY(-50%) scale(0.8) rotate(90deg);
+}
+
+.collapsible-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+    padding: 0 10px;
+}
+
+.collapsible-content.open {
+    max-height: 1000px; /* A large value to allow it to expand fully */
+}
+
+.collapsible-section {
+    margin-bottom: 8px;
+}
+
+/* ==========================================================================
+   8. Changelog Modal & Detail Panel Actions
+   ========================================================================== */
+
+/* --- Styling for the new action buttons --- */
+.mod-detail-actions {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Space between the buttons */
+}
+
+/* A new generic style for the Changelog and Nexus buttons */
+.detail-action-btn {
+    font-family: var(--font-secondary);
+    font-weight: bold;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-color);
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center; /* Center text for both button and <a> tags */
+    display: block; /* Make the <a> tag behave like a button */
+    text-decoration: none; /* Remove underline from <a> tag */
+    font-size: 10pt;
+}
+
+.detail-action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent-color);
+}
+
+/* --- Styling for the Changelog Modal --- */
+.changelog-modal {
+    max-width: 800px;
+    text-align: left;
+}
+
+.changelog-list-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 15px;
+    font-family: var(--font-secondary);
+}
+
+.changelog-version {
+    font-family: var(--font-primary);
+    font-size: 14pt;
+    color: var(--accent-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 5px;
+    margin-top: 20px;
+}
+.changelog-version:first-child {
+    margin-top: 0;
+}
+
+.changelog-list {
+    list-style: none;
+    padding-left: 15px;
+    margin-top: 10px;
+}
+
+.changelog-list li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+#modDetailSecondaryActions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px; /* Replaces 'auto' with a fixed margin for spacing */
+    /* padding-top is no longer needed */
+}
+
+/* --- Styling for Priority Modal --- */
+.priority-modal {
+    max-width: 450px;
+}
+
+.priority-modal p {
+    margin-top: 0;
+    opacity: 0.8;
+}
+
+.priority-modal #priorityInput {
+    width: 100%;
+    margin-top: 15px;
+    text-align: center;
+    font-size: 16pt;
+}
+
+#priorityModalTitle {
+    overflow-wrap: break-word; /* Allows long words to break and wrap */
+}
+
+/* --- Styling for NXM Handler Status Message --- */
+.handler-status {
+    margin-top: 15px; /* Add some space above the message */
+    font-weight: bold;
+    min-height: 1.2em; /* Prevent layout shift when text appears */
+    transition: color 0.3s;
+}
+
+.handler-status.status-success {
+    color: #4CAF50; /* A nice green for success */
+}
+
+.handler-status.status-error {
+    color: var(--danger-color); /* Use your existing theme's red for errors */
+}
+
+.handler-status.status-info {
+    color: var(--accent-color); /* A neutral/informative color */
+}
