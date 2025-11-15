@@ -126,8 +126,16 @@
             <div class="browse-main-content">
               <div class="browse-controls">
                   <input type="text" id="browseSearchInput" class="themed-input" placeholder="Search mods...">
+                  <!-- NEW: Filter Dropdown -->
+                  <select id="browseFilterSelect" class="themed-input styled-select">
+                      <option value="all" selected>Show: All Mods</option>
+                      <option value="installed">Show: Installed</option>
+                      <option value="uninstalled">Show: Not Installed</option>
+                  </select>
+
+                  <!-- NEW: Sort Dropdown -->
                   <select id="browseSortSelect" class="themed-input styled-select">
-                      <option value="last_updated">Sort by: Last Updated</option>
+                      <option value="last_updated" selected>Sort by: Last Updated</option>
                       <option value="endorsements">Sort by: Endorsements</option>
                   </select>
               </div>
@@ -289,6 +297,9 @@
    <!-- Template for a single Mod Card in the Browse grid -->
     <template id="modCardTemplate">
         <div class="mod-card">
+            <div class="mod-card-installed-badge hidden">
+                <img src="/src/assets/icon-installed.png" alt="Installed" />
+            </div>
             <img class="mod-card-thumbnail" src="/src/assets/placeholder.png" alt="Mod Thumbnail">
             <div class="mod-card-body">
                 <h3 class="mod-card-title">Mod Title</h3>

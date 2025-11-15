@@ -32,3 +32,6 @@ dist-ssr
 
 # Environment files
 .env
+
+curated/
+mod_warnings.json

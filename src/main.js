@@ -8,7 +8,7 @@ const appWindow = getCurrentWindow()
 
 // --- Global State & Constants ---
 let NEXUS_API_KEY = "";
-const CURATED_LIST_URL = "https://raw.githubusercontent.com/Syzzle07/NMS-Mod-Manager/refs/heads/main/curated/curated_list.json";
+const CURATED_LIST_URL = "https://raw.githubusercontent.com/Syzzle07/SingularityMM/refs/heads/data/curated/curated_list.json";
 let curatedData = []; // This will hold all pre-processed data from the server.
 let downloadHistory = [];
 const nexusModCache = new Map();
@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
           closeFileSelectionModalBtn = document.getElementById('closeFileSelectionModalBtn'),
           browseSearchInput = document.getElementById('browseSearchInput'),
           browseSortSelect = document.getElementById('browseSortSelect'),
+          browseFilterSelect = document.getElementById('browseFilterSelect'),
           modDetailPanel = document.getElementById('modDetailPanel'),
           modDetailCloseBtn = document.getElementById('modDetailCloseBtn'),
           modDetailName = document.getElementById('modDetailName'),
@@ -1230,26 +1231,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function filterAndDisplayMods() {
         const searchTerm = browseSearchInput.value.toLowerCase();
-        const sortBy = browseSortSelect.value;
+        const filterBy = browseFilterSelect.value; // Read from the new filter dropdown
+        const sortBy = browseSortSelect.value;     // Read from the sort dropdown
 
-        const filteredMods = curatedData.filter(modData => {
-            if (!modData) return false;
-            return (
-                modData.name.toLowerCase().includes(searchTerm) ||
-                modData.author.toLowerCase().includes(searchTerm) ||
-                modData.summary.toLowerCase().includes(searchTerm)
-            );
-        });
+        let processedMods = [...curatedData]; // Start with a full copy
 
-        filteredMods.sort((a, b) => {
-            if (!a || !b) return 0;
-            if (sortBy === 'endorsements') {
-                return b.endorsement_count - a.endorsement_count;
-            }
-            return b.updated_timestamp - a.updated_timestamp;
-        });
+        // --- STAGE 1: FILTERING ---
 
-        displayMods(filteredMods);
+        // 1a. Filter by Search Term
+        if (searchTerm) {
+            processedMods = processedMods.filter(modData => {
+                if (!modData) return false;
+                return (
+                    modData.name.toLowerCase().includes(searchTerm) ||
+                    modData.author.toLowerCase().includes(searchTerm) ||
+                    modData.summary.toLowerCase().includes(searchTerm)
+                );
+            });
+        }
+
+        // 1b. Filter by Installation Status
+        if (filterBy === 'installed') {
+            processedMods = processedMods.filter(mod => appState.installedModsMap.has(String(mod.mod_id)));
+        } else if (filterBy === 'uninstalled') {
+            processedMods = processedMods.filter(mod => !appState.installedModsMap.has(String(mod.mod_id)));
+        }
+
+        // --- STAGE 2: SORTING ---
+        // Now, sort the already filtered list.
+        if (sortBy === 'endorsements') {
+            processedMods.sort((a, b) => (b.endorsement_count || 0) - (a.endorsement_count || 0));
+        } else { // Default sort is 'last_updated'
+            processedMods.sort((a, b) => (b.updated_timestamp || 0) - (a.updated_timestamp || 0));
+        }
+
+        // --- STAGE 3: DISPLAY ---
+        displayMods(processedMods);
     }
 
     function displayMods(modsToDisplay) {
@@ -1264,6 +1281,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!modData) continue;
             const card = template.content.cloneNode(true).firstElementChild;
             card.dataset.modId = modData.mod_id;
+            // --- THIS IS THE NEW LOGIC ---
+            // Check if this mod is in our map of installed mods.
+            const modIdStr = String(modData.mod_id);
+            if (appState.installedModsMap.has(modIdStr)) {
+                
+                // 1. Add the 'is-installed' class to the main card to trigger the border.
+                card.classList.add('is-installed');
+
+                // 2. Make the badge container visible.
+                card.querySelector('.mod-card-installed-badge').classList.remove('hidden');
+            }
+            // --- END OF NEW LOGIC ---
             const titleElement = card.querySelector('.mod-card-title');
             
             card.querySelector('.mod-card-thumbnail').src = modData.picture_url || '/src/assets/placeholder.png';
@@ -1994,6 +2023,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     browseSortSelect.addEventListener('change', filterAndDisplayMods);
+    browseFilterSelect.addEventListener('change', filterAndDisplayMods);
     browseSearchInput.addEventListener('input', filterAndDisplayMods);
 
     downloadHistoryBtn.addEventListener('click', async () => {
