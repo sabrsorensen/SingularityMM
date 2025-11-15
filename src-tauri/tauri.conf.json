@@ -28,7 +28,7 @@
     "windows": [
       {
         "title": "Singularity",
-        "width": 900,
+        "width": 950,
         "height": 900,
         "resizable": true,
         "decorations": false,
@@ -37,7 +37,7 @@
         "visible": false,
         "minHeight": 671,
         "useHttpsScheme": true,
-        "minWidth": 900
+        "minWidth": 950
       }
     ],
     "security": {

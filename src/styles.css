@@ -69,7 +69,7 @@ header {
 
 .header-content-wrapper {
     position: relative; /* Establishes a positioning context for its children */
-    width: 900px;       /* Matches your DEFAULT_WIDTH */
+    width: 950px;       /* Matches your DEFAULT_WIDTH */
     height: 100%;
     pointer-events: none;
 }
@@ -208,9 +208,9 @@ header {
 	flex-direction: column;
 	flex-grow: 1;
 	min-height: 0;
-  margin-left: -10px;  /* Counteract the parent's left padding */
-  margin-right: -10px; /* Counteract the parent's right padding */
-  margin-bottom: 15px;
+  margin-left: -15px;  /* Counteract the parent's left padding */
+  margin-right: -15px; /* Counteract the parent's right padding */
+  margin-bottom: -5px;
   margin-top: -10px;
   padding: 10px 10px 0px 10px;
 }
@@ -892,7 +892,7 @@ label.switch:has(input:checked)::before {
     justify-content: center;
     flex-shrink: 0;
     margin-top: 10px;
-    height: 105px; /* height */
+    height: 130px; /* height */
     color: #EAEAEA;
     font-size: 14pt;
     font-weight: bold;
@@ -1113,6 +1113,17 @@ label.switch:has(input:checked)::before {
     border-bottom: 0px solid rgba(255, 255, 255, 0.1);
 }
 
+.settings-modal > .setting-row > label {
+    /* Give all labels a fixed minimum width */
+    min-width: 100px;
+    
+    /* Ensure text is aligned to the left */
+    text-align: left;
+
+    /* Use flex-grow: 0 to prevent the label from expanding */
+    flex-grow: 0;
+}
+
 .setting-row label {
     font-size: 14px;
     font-weight: bold;
@@ -1124,7 +1135,7 @@ label.switch:has(input:checked)::before {
     gap: 15px;
 }
 
-#rowPaddingValue {
+.slider-value {
     font-size: 14px;
     color: var(--accent-color);
     width: 40px; /* Give it a fixed width to prevent layout shifts */
@@ -1304,7 +1315,7 @@ button.context-menu-item.delete:hover {
 .browse-grid {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--browse-grid-gap, 10px);
     overflow-y: auto;
     flex-grow: 1; /* This is the fix: tells the grid to take up all available space */
     min-height: 0; /* A crucial flexbox fix that enables proper scrolling */
@@ -1502,11 +1513,14 @@ button.context-menu-item.delete:hover {
     text-align: right;
 }
    
-/* --- NEW Side-by-Side Browse Layout --- */
+/* --- Side-by-Side Browse Layout --- */
 .browse-container {
     display: flex;
     flex-grow: 1;
     min-height: 0; /* Flexbox fix for scrolling */
+    margin-bottom: -5px;
+    margin-left: -5px;
+    margin-right: -5px;
 }
 
 .browse-main-content {

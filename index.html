@@ -222,11 +222,19 @@
             </div>
 
             <!-- 2. List Density Setting -->
-            <div class="setting-row">
+            <div class="setting-row settings-grid-row">
                 <label for="rowPaddingSlider" data-i18n="listDensityLabel">List Density</label>
                 <div class="slider-container">
                     <input type="range" id="rowPaddingSlider" min="0" max="10" value="5" step="1">
-                    <span id="rowPaddingValue">5px</span>
+                    <span id="rowPaddingValue" class="slider-value">5px</span>
+                </div>
+            </div>
+            <!-- Grid Density Setting -->
+            <div class="setting-row settings-grid-row">
+                <label for="gridGapSlider">Grid Density</label> <!-- You can add a data-i18n attribute later -->
+                <div class="slider-container">
+                    <input type="range" id="gridGapSlider" min="1" max="20" value="10" step="1">
+                    <span id="gridGapValue" class="slider-value">10px</span>
                 </div>
             </div>
             <!-- 4. NXM Handler Section -->

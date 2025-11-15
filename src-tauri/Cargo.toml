@@ -1,5 +1,5 @@
 [package]
-name = "singularity"
+name = "Singularity"
 version = "2.0.0"
 description = "A No Man's Sky Mod Manager"
 authors = ["Syzzle"]

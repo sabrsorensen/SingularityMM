@@ -14,7 +14,7 @@ let downloadHistory = [];
 const nexusModCache = new Map();
 const nexusFileCache = new Map();
 
-const DEFAULT_WIDTH = 900;
+const DEFAULT_WIDTH = 950;
 const PANEL_OPEN_WIDTH = 1300;
 let isPanelOpen = false;
 const SCROLL_SPEED = 5;
@@ -130,7 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
           confirmationModalTitle = document.getElementById('confirmationModalTitle'),
           confirmationModalDescription = document.getElementById('confirmationModalDescription'),
           confirmActionBtn = document.getElementById('confirmActionBtn'),
-          cancelActionBtn = document.getElementById('cancelActionBtn');
+          cancelActionBtn = document.getElementById('cancelActionBtn'),
+          gridGapSlider = document.getElementById('gridGapSlider'),
+          gridGapValue = document.getElementById('gridGapValue');
 
     // --- Core Application Logic ---
 
@@ -290,6 +292,11 @@ document.addEventListener('DOMContentLoaded', () => {
         rowPaddingSlider.value = savedPadding;
         rowPaddingValue.textContent = `${savedPadding}px`;
 
+        const savedGridGap = localStorage.getItem('browseGridGap') || '10';
+        document.documentElement.style.setProperty('--browse-grid-gap', `${savedGridGap}px`);
+        gridGapSlider.value = savedGridGap;
+        gridGapValue.textContent = `${savedGridGap}px`;
+
         appState.gamePath = await invoke('get_game_path');
         const hasGamePath = !!appState.gamePath;
         openModsFolderBtn.disabled = !hasGamePath;
@@ -318,9 +325,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.warn("Could not auto-load settings file. It may not exist yet.", e);
         }
-
-        // await fetchCuratedData();
-        // await checkForUpdates(true);
 
         // Listen for the nxm-link-received event from the Rust backend
         listen('nxm-link-received', (event) => {
@@ -2398,6 +2402,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         nxmHandlerBtn.disabled = false; // Re-enable button
+    });
+
+    gridGapSlider.addEventListener('input', () => {
+        const gap = gridGapSlider.value;
+        document.documentElement.style.setProperty('--browse-grid-gap', `${gap}px`);
+        gridGapValue.textContent = `${gap}px`;
+    });
+    gridGapSlider.addEventListener('change', () => {
+        localStorage.setItem('browseGridGap', gridGapSlider.value);
     });
 
     // --- App Initialization ---
