@@ -20,6 +20,7 @@ use unrar;
 use winreg::enums::*;
 use winreg::RegKey;
 use zip::ZipArchive;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // --- STRUCTS ---
 
@@ -112,6 +113,13 @@ struct ModRenderData {
     enabled: bool,
     priority: u32,
     local_info: Option<LocalModInfo>,
+}
+
+#[derive(Serialize, Clone)]
+struct DownloadResult {
+    path: String,
+    size: u64, // File size in bytes
+    created_at: u64, // Unix timestamp in seconds
 }
 
 // --- HELPER FUNCTIONS ---
@@ -1059,7 +1067,7 @@ fn register_nxm_protocol() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn download_mod_archive(download_url: String, file_name: String) -> Result<String, String> {
+async fn download_mod_archive(download_url: String, file_name: String) -> Result<DownloadResult, String> {
     let exe_path = env::current_exe().map_err(|e| e.to_string())?;
     let exe_dir = exe_path.parent().ok_or_else(|| "Could not get parent directory of executable.".to_string())?;
     
@@ -1083,7 +1091,19 @@ async fn download_mod_archive(download_url: String, file_name: String) -> Result
     fs::write(&final_archive_path, &file_bytes)
         .map_err(|e| format!("Failed to write archive to downloads folder: {}", e))?;
     
-    Ok(final_archive_path.to_string_lossy().into_owned())
+    // --- NEW LOGIC: Get file metadata ---
+    let metadata = fs::metadata(&final_archive_path).map_err(|e| e.to_string())?;
+    let file_size = metadata.len();
+    let created_time = metadata.created().map_err(|e| e.to_string())?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+
+    Ok(DownloadResult {
+        path: final_archive_path.to_string_lossy().into_owned(),
+        size: file_size,
+        created_at: created_time,
+    })
 }
 
 #[tauri::command]

@@ -55,6 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let contextMenu = null;
     
+    const downloadSortState = {
+        key: 'date', 
+        direction: 'desc'
+    };
+
     // --- UI Element References ---
     const loadFileBtn = document.getElementById('loadFileBtn'),
           openModsFolderBtn = document.getElementById('openModsFolderBtn'),
@@ -530,6 +535,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Other Helper Functions ---
+    function formatBytes(bytes, decimals = 1) {
+        if (!+bytes) return '0 B';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp) return '...';
+        // The timestamp from Rust is in seconds, JS Date needs milliseconds
+        const date = new Date(timestamp * 1000); 
+        return date.toLocaleDateString(); // Uses the user's local date format
+    }
+
     function showConfirmationModal(title, description) {
         return new Promise((resolve) => {
             confirmationModalTitle.textContent = title;
@@ -558,10 +579,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function startModDownload({ modId, fileId, version, fileName }, isUpdate = false) {
-        // --- THIS IS THE NEW DUPLICATE CHECK LOGIC ---
         const existingItem = downloadHistory.find(d => d.fileId === fileId);
         
-        // If the file is already in our library and this isn't an explicit update, ask the user what to do.
         if (existingItem && existingItem.archivePath && !isUpdate) {
             const confirmed = await showConfirmationModal(
                 'Duplicate Download',
@@ -570,19 +589,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!confirmed) {
                 console.log("User cancelled duplicate download.");
-                // As a helpful UX touch, let's open the download list and show them the existing file.
                 downloadHistoryModalOverlay.classList.remove('hidden');
-                // Bring the existing item to the top of the list
                 downloadHistory = downloadHistory.filter(d => d.fileId !== fileId);
                 downloadHistory.unshift(existingItem);
                 renderDownloadHistory();
-                return; // Stop the function here.
+                return;
             }
             
-            // If confirmed, remove the old entry from history. The new download will replace it.
             downloadHistory = downloadHistory.filter(d => d.fileId !== fileId);
         }
-        // --- END OF NEW LOGIC ---
 
         downloadHistoryModalOverlay.classList.remove('hidden');
 
@@ -596,7 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusText: isUpdate ? 'Updating...' : 'Waiting to start...',
             statusClass: 'progress',
             archivePath: null,
-            modFolderName: null
+            modFolderName: null,
+            size: 0, // Initialize size
+            createdAt: 0 // Initialize createdAt
         };
 
         downloadHistory.unshift(newItemData);
@@ -617,18 +634,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!downloadUrl) throw new Error("Could not retrieve download URL.");
 
             updateStatus('Downloading...', 'progress');
-            // The 'download_mod_archive' command will naturally overwrite any existing file with the same name.
-            const finalPath = await invoke('download_mod_archive', { downloadUrl, fileName });
-            
+            const downloadResult = await invoke('download_mod_archive', { downloadUrl, fileName });
+
             const item = downloadHistory.find(d => d.id === downloadId);
-            item.archivePath = finalPath;
+            if (item) {
+                item.archivePath = downloadResult.path;
+                item.size = downloadResult.size;
+                item.createdAt = downloadResult.created_at;
 
-            if (isUpdate) {
-                await handleDownloadItemInstall(downloadId, true);
-
-            } else {
-                updateStatus('Downloaded', 'success');
-                await saveDownloadHistory(downloadHistory);
+                if (isUpdate) {
+                    await handleDownloadItemInstall(downloadId, true);
+                } else {
+                    item.statusText = 'Downloaded';
+                    item.statusClass = 'success';
+                    await saveDownloadHistory(downloadHistory);
+                    renderDownloadHistory(); // Re-render to show final data
+                }
             }
 
         } catch (error) {
@@ -900,6 +921,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderDownloadHistory() {
+        // 1. Sort the history array based on the current state.
+        downloadHistory.sort((a, b) => {
+            let valA, valB;
+
+            switch (downloadSortState.key) {
+                case 'name':
+                    valA = a.modName ? a.modName.toLowerCase() : '';
+                    valB = b.modName ? b.modName.toLowerCase() : '';
+                    break;
+                case 'status':
+                    valA = a.statusText ? a.statusText.toLowerCase() : '';
+                    valB = b.statusText ? b.statusText.toLowerCase() : '';
+                    break;
+                case 'size':
+                    valA = a.size || 0;
+                    valB = b.size || 0;
+                    break;
+                default: // Default to 'date'
+                    // We use createdAt, falling back to the ID's timestamp if needed.
+                    valA = a.createdAt || parseInt(a.id.split('-')[1], 10);
+                    valB = b.createdAt || parseInt(b.id.split('-')[1], 10);
+                    break;
+            }
+
+            // Apply the sort direction
+            if (valA < valB) {
+                return downloadSortState.direction === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return downloadSortState.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        // 2. Render the sorted list.
         downloadListContainer.innerHTML = '';
         const template = document.getElementById('downloadItemTemplate');
 
@@ -911,12 +967,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 newItem.classList.add('installable');
             }
             
-            const nameEl = newItem.querySelector('.download-item-name');
-            const statusEl = newItem.querySelector('.download-item-status');
+            newItem.querySelector('.download-item-name').textContent = itemData.modName;
+            newItem.querySelector('.download-item-status').textContent = itemData.statusText;
+            newItem.querySelector('.download-item-size').textContent = formatBytes(itemData.size);
             
-            nameEl.textContent = itemData.modName;
-            statusEl.textContent = itemData.statusText;
-            statusEl.className = 'download-item-status';
+            // Use the createdAt timestamp if it exists, otherwise parse it from the ID as a fallback.
+            const timestamp = itemData.createdAt || parseInt(itemData.id.split('-')[1], 10) / 1000;
+            newItem.querySelector('.download-item-date').textContent = formatDate(timestamp);
+            
+            const statusEl = newItem.querySelector('.download-item-status');
+            statusEl.className = 'download-item-status'; // Reset classes
             statusEl.classList.add(`status-${itemData.statusClass}`);
             
             newItem.addEventListener('dblclick', () => {
@@ -927,6 +987,17 @@ document.addEventListener('DOMContentLoaded', () => {
             newItem.addEventListener('contextmenu', (e) => showDownloadContextMenu(e, itemData.id));
             
             downloadListContainer.appendChild(newItem);
+        }
+        
+        // 3. Update the header UI to show the current sort.
+        const headerRow = document.querySelector('.download-header-row');
+        if (headerRow) {
+            headerRow.querySelectorAll('.sortable').forEach(header => {
+                header.classList.remove('asc', 'desc');
+                if (header.dataset.sort === downloadSortState.key) {
+                    header.classList.add(downloadSortState.direction);
+                }
+            });
         }
     }
 
@@ -2411,6 +2482,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     gridGapSlider.addEventListener('change', () => {
         localStorage.setItem('browseGridGap', gridGapSlider.value);
+    });
+
+    document.querySelector('.download-header-row').addEventListener('click', (e) => {
+        const clickedHeader = e.target.closest('.sortable');
+        if (!clickedHeader) return;
+
+        const sortKey = clickedHeader.dataset.sort;
+
+        // If clicking the same header again, reverse the direction.
+        if (downloadSortState.key === sortKey) {
+            downloadSortState.direction = downloadSortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            // Otherwise, set the new key and default to descending order.
+            downloadSortState.key = sortKey;
+            downloadSortState.direction = 'desc';
+        }
+
+        // Re-render the list with the new sort order.
+        renderDownloadHistory();
     });
 
     // --- App Initialization ---

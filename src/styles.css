@@ -1002,6 +1002,52 @@ label.switch:has(input:checked)::before {
 }
 
 /* === DOWNLOAD HISTORY MODAL STYLES === */
+.download-header-row, .download-item {
+    display: grid;
+    /* Name | Status (120px) | Size (80px) | Date (120px) */
+    grid-template-columns: 1fr 120px 80px 120px;
+    align-items: center;
+    gap: 15px;
+}
+
+.download-header-row {
+    font-family: var(--font-primary);
+    font-size: 11pt;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 5px;
+    padding-top: 0;
+    padding-bottom: 8px;
+}
+
+.download-header-row .sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.download-header-row .sortable:hover {
+    color: var(--accent-color);
+}
+
+.download-header-row .sortable::after {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    margin-left: 8px;
+    opacity: 0.5;
+    vertical-align: middle;
+}
+.download-header-row .sortable.asc::after {
+    border-bottom: 5px solid var(--accent-color);
+    opacity: 1;
+}
+.download-header-row .sortable.desc::after {
+    border-top: 5px solid var(--accent-color);
+    opacity: 1;
+}
+
 .download-item.installable {
     cursor: pointer;
     transition: background-color 0.2s;
@@ -1013,33 +1059,24 @@ label.switch:has(input:checked)::before {
 
 
 .download-modal {
-    max-width: 700px; /* A nice wide modal */
+    max-width: 800px; /* A nice wide modal */
     text-align: left;
     font-family: var(--font-primary);
 }
 
 .download-list-container {
-    margin-top: 20px;
     margin-bottom: 20px;
     max-height: 400px; /* Limit height and allow scrolling */
     overflow-y: auto;
-    padding-right: 10px;
     display: flex;
     flex-direction: column-reverse; /* This makes new items appear at the top! */
 }
 
 .download-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     padding: 12px;
     border-radius: 4px;
     background-color: rgba(0, 0, 0, 0.2);
     margin-bottom: 8px;
-}
-
-.download-item-info {
-    flex-grow: 1;
 }
 
 .download-item-name {

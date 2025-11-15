@@ -337,10 +337,10 @@
 
     <template id="downloadItemTemplate">
         <div class="download-item">
-            <div class="download-item-info">
-                <div class="download-item-name">Mod Name Placeholder</div>
-                <div class="download-item-status">Status placeholder...</div>
-            </div>
+            <div class="download-item-name">Mod Name Placeholder</div>
+            <div class="download-item-status">Status placeholder...</div>
+            <div class="download-item-size">...</div>  <!-- ADD THIS -->
+            <div class="download-item-date">...</div>  <!-- ADD THIS -->
         </div>
     </template>
 
@@ -360,6 +360,12 @@
     <div id="downloadHistoryModalOverlay" class="modal-overlay hidden">
       <div class="modal-content download-modal">
         <h2 data-i18n="downloadHistoryTitle">DOWNLOADS</h2>
+        <div class="download-header-row">
+          <span class="header-name sortable" data-sort="name">Name</span>
+          <span class="header-status sortable" data-sort="status">Status</span>
+          <span class="header-size sortable" data-sort="size">Size</span>   <!-- ADD THIS -->
+          <span class="header-date sortable" data-sort="date">Date</span>   <!-- ADD THIS -->
+        </div>
         <div id="downloadListContainer" class="download-list-container">
           <!-- Download items will be injected here -->
         </div>
