@@ -2303,14 +2303,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     clearDownloadHistoryBtn.addEventListener('click', async () => {
-        const confirmed = await confirm("Are you sure you want to clear the entire download history?", {
-            title: "Clear History",
-            type: "warning"
-        });
+        // 1. Show the new, more explicit confirmation dialog.
+        const confirmed = await showConfirmationModal(
+            'Delete All Downloads',
+            'Are you sure you want to delete ALL downloaded mod archives? This will remove the files from your computer and cannot be undone.'
+        );
+
         if (confirmed) {
-            downloadHistory = []; // Clear in-memory array
-            await saveDownloadHistory(downloadHistory); // Save empty array to file
-            renderDownloadHistory(); // Re-render the (now empty) UI
+            try {
+                console.log("User confirmed. Deleting all downloaded archives...");
+                
+                // 2. Call the new Rust command to wipe the downloads folder.
+                await invoke('clear_downloads_folder');
+
+                // 3. Clear the in-memory history array.
+                downloadHistory = [];
+                
+                // 4. Save the now-empty history array to the file.
+                await saveDownloadHistory(downloadHistory);
+                
+                // 5. Re-render the UI, which will now be empty.
+                renderDownloadHistory();
+
+                console.log("All downloads successfully deleted.");
+
+            } catch (error) {
+                console.error("Failed to delete all downloads:", error);
+                alert(`An error occurred while deleting the files: ${error}`);
+            }
+        } else {
+            console.log("User cancelled 'Delete All' operation.");
         }
     });
 

@@ -1106,6 +1106,28 @@ fn delete_archive_file(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn clear_downloads_folder() -> Result<(), String> {
+    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = exe_path.parent().ok_or_else(|| "Could not get parent directory of executable.".to_string())?;
+    let downloads_path = exe_dir.join("downloads");
+
+    if downloads_path.exists() {
+        // Read all entries in the directory
+        let entries = fs::read_dir(&downloads_path).map_err(|e| e.to_string())?;
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                // We only want to delete files, not subdirectories (as a safety measure)
+                if path.is_file() {
+                    fs::remove_file(path).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // --- MAIN FUNCTION ---
 fn main() {    
     tauri::Builder::default()
@@ -1207,7 +1229,8 @@ fn main() {
             get_all_mods_for_render,
             download_mod_archive,
             show_in_folder,
-            delete_archive_file
+            delete_archive_file,
+            clear_downloads_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
