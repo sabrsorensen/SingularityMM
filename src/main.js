@@ -866,24 +866,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const installedFiles = appState.installedModsMap.get(modIdStr);
         const isInstalled = installedFiles && installedFiles.size > 0;
 
-        // --- Update the Mod Detail Panel (if it's open for this mod) ---
+        // --- 1. Update the Mod Detail Panel (if it's open for this mod) ---
         if (!modDetailPanel.classList.contains('hidden') && modDetailName.dataset.modId === modIdStr) {
-            // Find the main install button
+            // Update the main download/manage button text
             const primaryBtn = modDetailInstallBtnContainer.querySelector('.mod-card-install-btn');
             if (primaryBtn) {
-                primaryBtn.textContent = isInstalled ? 'MANAGE FILES' : 'INSTALL';
+                primaryBtn.textContent = isInstalled ? 'MANAGE FILES' : 'DOWNLOAD';
             }
 
-            // Update the "Installed" version field
-            // (This is a simplified version; you can expand it with the full logic from openModDetailPanel if needed)
-            modDetailInstalled.textContent = isInstalled ? installedFiles.values().next().value : 'N/A';
+            // Update the "Installed" version field in the metadata
+            if (isInstalled) {
+                // This displays the version of the first installed file we find for that mod
+                modDetailInstalled.textContent = installedFiles.values().next().value || 'Installed';
+            } else {
+                modDetailInstalled.textContent = 'N/A';
+            }
         }
 
-        // --- Update the Mod Card in the Browse Grid (if it's visible) ---
+        // --- 2. THIS IS THE FIX: Update the Mod Card in the Browse Grid ---
         const card = browseGridContainer.querySelector(`.mod-card[data-mod-id="${modIdStr}"]`);
         if (card) {
-            // You could add an "Installed" badge to the card here in the future if you wanted.
-            // For now, we don't have a button on the card, but this is where you'd update it.
+            console.log(`Updating grid card for modId: ${modIdStr}. Is installed: ${isInstalled}`);
+            const badge = card.querySelector('.mod-card-installed-badge');
+            
+            // Use classList.toggle for a clean add/remove based on the isInstalled boolean
+            card.classList.toggle('is-installed', isInstalled);
+            if (badge) {
+                badge.classList.toggle('hidden', !isInstalled);
+            }
         }
     }
 
@@ -1928,77 +1938,59 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteButton.textContent = i18n.get('deleteModBtn', { modName });
         deleteButton.className = 'context-menu-item delete';
         deleteButton.onclick = async () => {
-        removeContextMenu();
-        console.log(`[DELETE] User initiated delete for mod: "${modName}"`);
-        
-        const confirmed = await confirm(
-            i18n.get('confirmDeleteMod', { modName }),
-            { title: i18n.get('confirmDeleteTitle'), type: 'warning' }
-        );
+            removeContextMenu();
+            const confirmed = await confirm(
+                i18n.get('confirmDeleteMod', { modName }),
+                { title: i18n.get('confirmDeleteTitle'), type: 'warning' }
+            );
+            if (confirmed) {
+                try {
+                    // Call the Rust command. It handles file deletion and returns the new data for the UI.
+                    const modsToRender = await invoke('delete_mod', { modName: modName });
+                    
+                    // Re-sync the in-memory XML document to reflect the deletion.
+                    try {
+                        const settingsPath = await join(appState.gamePath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
+                        const content = await readTextFile(settingsPath);
+                        appState.xmlDoc = new DOMParser().parseFromString(content, "application/xml");
+                    } catch (e) {
+                        console.error("Failed to re-sync xmlDoc after deletion:", e);
+                        // Force a reload to prevent a de-synced state, which is safer for the user.
+                        location.reload(); 
+                        return;
+                    }
+                    
+                    // Re-render the main mod list UI efficiently.
+                    await renderModList(modsToRender);
 
-        if (!confirmed) {
-            console.log("[DELETE] User cancelled deletion.");
-            return;
-        }
+                    // Find the corresponding item in the download history to update its state.
+                    const deletedItem = downloadHistory.find(item => item.modFolderName && item.modFolderName.toUpperCase() === modName.toUpperCase());
+                    if (deletedItem) {
+                        // Revert the status from "Installed" back to "Downloaded".
+                        deletedItem.statusText = 'Downloaded';
+                        deletedItem.statusClass = 'success';
+                        
+                        const modIdToUpdate = deletedItem.modId;
+                        
+                        // Clear the folder name association.
+                        deletedItem.modFolderName = null; 
+                        
+                        // Save the updated download history.
+                        await saveDownloadHistory(downloadHistory);
 
-        try {
-            console.log("[DELETE] Invoking Rust 'delete_mod' command...");
-            const modsToRender = await invoke('delete_mod', { modName: modName });
-            console.log("[DELETE] Rust command successful. Received new mod list to render.");
+                        // If we found the item, we also have its modId, so we can update the browse tab UI.
+                        if (modIdToUpdate) {
+                            updateModDisplayState(modIdToUpdate);
+                        }
+                    }
 
-            // Re-sync in-memory XML
-            try {
-                const settingsPath = await join(appState.gamePath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
-                const content = await readTextFile(settingsPath);
-                appState.xmlDoc = new DOMParser().parseFromString(content, "application/xml");
-                console.log("[DELETE] Successfully re-synced in-memory xmlDoc.");
-            } catch (e) {
-                console.error("[DELETE] CRITICAL: Failed to re-sync xmlDoc after deletion. Forcing reload.", e);
-                location.reload();
-                return;
+                    alert(i18n.get('deleteSuccess', { modName }));
+
+                } catch (error) {
+                    alert(`${i18n.get('deleteError', { modName })}\n\n${error}`);
+                }
             }
-            
-            // Re-render main mod list
-            await renderModList(modsToRender);
-            console.log("[DELETE] Main mod list re-rendered.");
-
-            // --- STATE REVERT LOGIC WITH LOGGING ---
-            console.log(`[DELETE] Attempting to find item in downloadHistory with modFolderName: "${modName}"`);
-            
-            // Log the entire history for inspection
-            console.log("[DELETE] Current downloadHistory:", JSON.parse(JSON.stringify(downloadHistory)));
-
-            const deletedItem = downloadHistory.find(item => item.modFolderName && item.modFolderName.toUpperCase() === modName.toUpperCase());
-
-            if (deletedItem) {
-                console.log("[DELETE] FOUND item in download history:", deletedItem);
-                
-                // Log the state *before* the change
-                console.log(`[DELETE] Before change: statusText="${deletedItem.statusText}", statusClass="${deletedItem.statusClass}", modFolderName="${deletedItem.modFolderName}"`);
-
-                deletedItem.statusText = 'Downloaded';
-                deletedItem.statusClass = 'success';
-                deletedItem.modFolderName = null;
-                
-                // Log the state *after* the change
-                console.log(`[DELETE] After change: statusText="${deletedItem.statusText}", statusClass="${deletedItem.statusClass}", modFolderName="${deletedItem.modFolderName}"`);
-                
-                console.log("[DELETE] Saving updated download history...");
-                await saveDownloadHistory(downloadHistory);
-                console.log("[DELETE] Download history saved.");
-
-            } else {
-                console.warn(`[DELETE] WARNING: Could not find a matching item in downloadHistory for modFolderName: "${modName}". The status will not be reverted.`);
-            }
-            // --- END OF STATE REVERT LOGIC ---
-
-            alert(i18n.get('deleteSuccess', { modName }));
-
-        } catch (error) {
-            console.error("[DELETE] An error occurred during the deletion process:", error);
-            alert(`${i18n.get('deleteError', { modName })}\n\n${error}`);
-        }
-    };
+        };
 
         contextMenu.appendChild(copyButton);
         contextMenu.appendChild(priorityButton);
@@ -2250,8 +2242,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     browseGridContainer.addEventListener('click', (e) => {
+        // --- THIS IS THE NEW LOGIC ---
+        // Remove 'selected' from any previously selected card
+        const previouslySelected = browseGridContainer.querySelector('.mod-card.selected');
+        if (previouslySelected) {
+            previouslySelected.classList.remove('selected');
+        }
+        // --- END OF NEW LOGIC ---
+
         const clickedCard = e.target.closest('.mod-card');
         if (clickedCard) {
+            // Add 'selected' to the newly clicked card
+            clickedCard.classList.add('selected'); 
+            
             const modId = parseInt(clickedCard.dataset.modId, 10);
             const modData = curatedData.find(m => m.mod_id === modId);
             if (modData) openModDetailPanel(modData);
@@ -2264,6 +2267,14 @@ document.addEventListener('DOMContentLoaded', () => {
         modDetailPanel.classList.remove('open');
         const currentSize = await appWindow.innerSize();
         await appWindow.setSize(new LogicalSize(DEFAULT_WIDTH, currentSize.height));
+
+        // --- THIS IS THE NEW LOGIC ---
+        // When the panel closes, find the selected card and remove the highlight
+        const currentlySelected = browseGridContainer.querySelector('.mod-card.selected');
+        if (currentlySelected) {
+            currentlySelected.classList.remove('selected');
+        }
+        // --- END OF NEW LOGIC ---
     });
 
     browseView.addEventListener('click', (e) => {

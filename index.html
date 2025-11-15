@@ -16,7 +16,6 @@
             <button class="nav-button" id="navBrowse">BROWSE</button>
         </div>
       </div>
-
       <!-- ALL right-side controls are now in ONE container, positioned on the far right -->
       <div class="header-controls-right">
         <div id="updateCheckBtn" class="header-button">
@@ -119,10 +118,10 @@
                 </div>
             </div>
         </div>
-
         <!-- View for "Browse" -->
         <div id="browseView" class="hidden">
           <div class="browse-container">
+            <div class="browse-background-panel"></div>
             <div class="browse-main-content">
               <div class="browse-controls">
                   <input type="text" id="browseSearchInput" class="themed-input" placeholder="Search mods...">
@@ -132,7 +131,6 @@
                       <option value="installed">Show: Installed</option>
                       <option value="uninstalled">Show: Not Installed</option>
                   </select>
-
                   <!-- NEW: Sort Dropdown -->
                   <select id="browseSortSelect" class="themed-input styled-select">
                       <option value="last_updated" selected>Sort by: Last Updated</option>
@@ -205,7 +203,6 @@
     <div id="settingsModalOverlay" class="modal-overlay hidden">
         <div class="modal-content settings-modal">
             <h2 data-i18n="settingsModalTitle">SETTINGS</h2>
-
             <!-- 1. Language Setting -->
             <div class="setting-row">
                 <label for="languageSelector" data-i18n="languageLabel">Language</label>
@@ -220,7 +217,6 @@
                     <option value="sv">Swedish</option>
                 </select>
             </div>
-
             <!-- 2. List Density Setting -->
             <div class="setting-row settings-grid-row">
                 <label for="rowPaddingSlider" data-i18n="listDensityLabel">List Density</label>
@@ -244,7 +240,6 @@
                 <button id="nxmHandlerBtn" class="modal-btn-confirm">Set as Default Handler</button>
                 <p id="nxmHandlerStatus" class="handler-status hidden"></p>
             </div>
-
             <!-- 3. Troubleshoot Section -->
             <div class="troubleshoot-section">
                 <h3 data-i18n="troubleshootModalTitle">TROUBLESHOOT</h3>
@@ -312,9 +307,7 @@
             <div class="mod-card-body">
                 <h3 class="mod-card-title">Mod Title</h3>
                 <p class="mod-card-author">by Author</p>
-
                 <p class="mod-card-summary">Mod summary will go here...</p>
-                
                 <!-- This now only contains downloads and endorsements -->
                 <div class="mod-card-stats">
                     <span><img src="/src/assets/icon-download.png"> <span class="mod-card-downloads">0</span></span>
@@ -334,7 +327,6 @@
             </div>
         </div>
     </template>
-
     <template id="downloadItemTemplate">
         <div class="download-item">
             <div class="download-item-name">Mod Name Placeholder</div>
@@ -343,7 +335,6 @@
             <div class="download-item-date">...</div>  <!-- ADD THIS -->
         </div>
     </template>
-
     <!-- Modal for selecting which file of a mod to install -->
     <div id="fileSelectionModalOverlay" class="modal-overlay hidden">
       <div class="modal-content file-selection-modal">

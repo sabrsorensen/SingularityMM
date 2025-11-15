@@ -17,13 +17,45 @@
 }
 
 :root {
-	--accent-color: #f1e8d1;
-	--hover-color: #007ACC;
-	--text-color: #EAEAEA;
-	--danger-color: #F34C42;
-	--danger-hover-color: #C9302C;
+    /* ============================================= */
+    /* === THEME CONTROL PANEL ("NMS Origins") === */
+    /* ============================================= */
+
+    /* --- Base Palette --- */
+    --c-background: #1D1D1D;      /* NMS Dark Plum */
+    --c-text-primary: #F1F1F1;    /* Soft White */
+    --c-accent-primary: #CA4862;  /* NMS Teal */
+    --c-accent-secondary: #F16764;/* NMS Coral */
+    --c-status-success: #8FDEB4;  /* NMS Mint Green */
+    --c-danger: #CA4862;          /* NMS Raspberry */
+
+    /* --- UI Element Colors (Derived from Palette) --- */
+    /* Backgrounds */
+    --c-bg-panel: rgba(44, 44, 44, 0.75);      /* Semi-transparent */
+    --c-bg-modal: rgba(44, 44, 44, 0.95);      /* Darker, more opaque modal bg */
+    --c-bg-mod-row: rgba(202, 72, 98, 0.05);  /* Color for rows */
+    --c-bg-mod-row-alt: rgba(202, 72, 98, 0.08); /* Slightly more opaque for alternating rows */
+
+    /* Borders & Dividers */
+    --c-border: #693b4f;                      /* Lighter shade of plum */
+    --c-border-interactive: var(--c-accent-primary); /* Use Teal for hover/focus */
+    
+    /* Interactive States (Hovers, etc.) */
+    --c-hover-glow: rgba(255, 255, 255, 0.08);
+    --c-accent-primary-hover: #461D2D;        /* A slightly brighter Teal */
+    --c-danger-hover: #F16764;                /* A darker Raspberry */
+
+    /* Glows & Shadows */
+    --shadow-glow-accent: 0 0 8px 1px rgba(250, 90, 112, 0.7); /* Teal glow */
+    --shadow-text: 1px 1px 2px rgba(0, 0, 0, 0.5);
+
+    /* --- Fonts (Unchanged) --- */
     --font-primary: 'NMSGeoSans', sans-serif;
     --font-secondary: 'Roboto', sans-serif;
+
+    /* --- Spacing Variables (Bonus for consistency) --- */
+    --mod-row-vertical-padding: 5px; /* Default list density */
+    --browse-grid-gap: 10px;        /* Default grid density */
 }
 
 * {
@@ -39,11 +71,8 @@
 }
 
 body {
-	background-image: url('assets/background.png');
-	background-position: center;
-	background-repeat: no-repeat;
-	background-size: auto 100%; 
-	color: var(--text-color);
+	background-color: var(--c-background);
+	color: var(--c-text-primary);
 	display: flex;
 	flex-direction: column;
 	font-family: var(--font-secondary);
@@ -126,8 +155,8 @@ header {
 }
 
 .header-button:hover {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-color: var(--accent-color);
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--c-accent-primary);
 }
 
 .header-button img {
@@ -137,7 +166,7 @@ header {
 .header-button .button-text {
     font-size: 11pt;
     font-family: var(--font-primary);
-    color: var(--text-color);
+    color: var(--c-text-primary);
     opacity: 0.8;
 }
 
@@ -159,16 +188,6 @@ header {
 	z-index: 1000;   
 }
 
-/* #languageSelector {
-	background-color: #3C3C3C;
-	border: 1px solid #555;
-	border-radius: 4px;
-	color: var(--text-color);
-	font-size: 12px;
-	padding: 2px 4px;
-} */
-
-
 /* ==========================================================================
    3. Main Layout & Panels
    ========================================================================== */
@@ -183,9 +202,9 @@ header {
 
 .top-panel {
 	backdrop-filter: blur(1px);
-	background-color: rgba(107, 36, 62, 0);
+	background-color: var(--c-bg-panel);
 	border: 0px solid rgba(255, 255, 255, 0.2);
-	border-radius: 0px;
+	border-radius: 3px;
 	-webkit-backdrop-filter: blur(1px);
   margin-bottom: 15px;
   flex-shrink: 0;
@@ -193,25 +212,25 @@ header {
   justify-content: space-between;
   align-items: flex-start;
   gap: 30px;
-  margin-left: -15px;  /* Counteract the parent's left padding */
-  margin-right: -15px; /* Counteract the parent's right padding */
+  margin-left: 0px;  /* Counteract the parent's left padding */
+  margin-right: 0px; /* Counteract the parent's right padding */
   padding: 15px 15px 15px 0;
 }
 
 .list-panel {
 	backdrop-filter: blur(1px);
-	background-color: rgba(107, 36, 62, 0.1);
+	background-color: var(--c-bg-panel);
 	border: 0px solid rgba(255, 255, 255, 0.1);
-	border-radius: 0px;
+	border-radius: 3px;
 	-webkit-backdrop-filter: blur(1px);
   display: flex;
 	flex-direction: column;
 	flex-grow: 1;
 	min-height: 0;
-  margin-left: -15px;  /* Counteract the parent's left padding */
-  margin-right: -15px; /* Counteract the parent's right padding */
+  margin-left: 0px;  /* Counteract the parent's left padding */
+  margin-right: 0px; /* Counteract the parent's right padding */
   margin-bottom: -5px;
-  margin-top: -10px;
+  margin-top: 10px;
   padding: 10px 10px 0px 10px;
 }
 
@@ -475,7 +494,7 @@ h3,
 }
 
 .header-row {
-	border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+	border-bottom: 1px solid var(--c-border);
 	font-size: 13.5pt;
 	font-weight: bold;
 	margin-bottom: 5px;
@@ -537,20 +556,20 @@ h3,
 }
 
 .mod-row {
-	background-color: rgba(60, 60, 60, 0.6);
+	background-color: var(--c-bg-mod-row);
 	border-radius: 4px;
 	margin-bottom: 4px;
 }
 
 .mod-row:nth-child(even) {
-	background-color: rgba(74, 74, 74, 0.6);
+	background-color: var(--c-bg-mod-row-alt);
 }
 
 .mod-row input[type="text"] {
 	background-color: rgba(74, 74, 74, 0.9);
-	border: 1px solid var(--accent-color);
+	border: 1px solid var(--c-accent-primary);
 	border-radius: 4px;
-	color: var(--text-color);
+	color: var(--c-text-primary);
 	padding: 4px;
 	text-align: center;
 	width: 60px;
@@ -563,7 +582,7 @@ h3,
 /* This is the placeholder that reserves the space in the list */
 .placeholder {
     background-color: rgba(241, 232, 209, 0.2);
-    border: 1px dashed var(--accent-color);
+    border: 1px dashed var(--c-accent-primary);
     border-radius: 4px;
     margin-bottom: 4px;
 }
@@ -658,7 +677,7 @@ label.switch:has(input:checked)::before {
     
     /* --- Colors and Fonts --- */
     background-color: rgba(60, 60, 60, 0.3);
-    color: var(--text-color);
+    color: var(--c-text-primary);
     font-family: var(--font-secondary);
     font-size: 14px;
 
@@ -674,22 +693,22 @@ label.switch:has(input:checked)::before {
 
 /* Style the placeholder text (e.g., "Search mods...") */
 #searchModsInput::placeholder {
-    color: var(--text-color);
+    color: var(--c-text-primary);
     opacity: 0.6; 
 }
 
 /* --- The Glow Effect on Focus --- */
 #searchModsInput:focus {
-    border-color: var(--accent-color);
+    border-color: var(--c-border-interactive);
     /* Add a glow effect that matches the theme */
-    box-shadow: 0 0 8px 1px rgba(241, 232, 209, 0.7); 
+    box-shadow: var(--shadow-glow-accent); 
 }
 
 /* --- Style for the selected mod row --- */
 .mod-row.selected {
     /* Adds a subtle glow to the selected mod */
-    box-shadow: 0 0 8px 1px var(--accent-color);
-    border: 1px solid rgba(241, 232, 209, 0.7);
+    box-shadow: 0 0 8px 1px var(--c-accent-primary);
+    border: 1px solid var(--c-accent-primary);
 }
 
 /* --- UPDATE INDICATOR IN MOD LIST --- */
@@ -697,19 +716,19 @@ label.switch:has(input:checked)::before {
     display: inline-block;
     width: 8px;
     height: 8px;
-    background-color: #FFD700; /* Same gold color as the "latest version" text */
+    background-color: var(--c-accent-secondary);
     border-radius: 50%; /* Makes it a circle */
     margin-left: 10px;
     
     /* A subtle glow to make it stand out */
-    box-shadow: 0 0 6px 1px #FFD700;
+    box-shadow: 0 0 6px 1px var(--c-accent-secondary);
 
     /* A gentle pulsing animation to draw the eye */
-    animation: pulse 2s infinite;
+    animation: pulse-gold 2s infinite;
 }
 
 /* Define the pulsing animation */
-@keyframes pulse {
+@keyframes pulse-gold {
     0% {
         transform: scale(0.95);
         box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
@@ -761,9 +780,9 @@ label.switch:has(input:checked)::before {
     align-items: center;
     font-family: var(--font-primary);
     font-size: 15pt;
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid var(--c-border);
 }
 
 /* --- ADD THIS NEW RULE FOR THE BUTTON --- */
@@ -821,7 +840,7 @@ label.switch:has(input:checked)::before {
 }
 
 #infoLatestVersion.update-available {
-    color: #FFD700; /* Gold color for update notification */
+    color: var(--c-accent-secondary);
     font-weight: bold;
 }
 
@@ -925,8 +944,8 @@ label.switch:has(input:checked)::before {
 }
 
 .modal-content {
-	background-color: rgba(60, 60, 60, 0.9);
-	border: 1px solid rgba(255, 255, 255, 0.2);
+	background-color: var(--c-bg-modal);
+	border: 1px solid var(--c-border);
 	border-radius: 8px;
 	max-width: 400px;
 	padding: 25px;
@@ -978,7 +997,7 @@ label.switch:has(input:checked)::before {
 .update-item-name {
     font-size: 13pt;
     font-family: var(--font-primary);
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
 }
 
 .update-item-version {
@@ -987,7 +1006,7 @@ label.switch:has(input:checked)::before {
 }
 
 .update-item-version .arrow {
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     margin: 0 8px;
 }
 
@@ -1025,7 +1044,7 @@ label.switch:has(input:checked)::before {
 }
 
 .download-header-row .sortable:hover {
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
 }
 
 .download-header-row .sortable::after {
@@ -1040,11 +1059,11 @@ label.switch:has(input:checked)::before {
     vertical-align: middle;
 }
 .download-header-row .sortable.asc::after {
-    border-bottom: 5px solid var(--accent-color);
+    border-bottom: 5px solid var(--c-accent-primary);
     opacity: 1;
 }
 .download-header-row .sortable.desc::after {
-    border-top: 5px solid var(--accent-color);
+    border-top: 5px solid var(--c-accent-primary);
     opacity: 1;
 }
 
@@ -1088,7 +1107,7 @@ label.switch:has(input:checked)::before {
 .download-item-name {
     font-size: 13pt;
     font-family: var(--font-primary);
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
 }
 
 .download-item-status {
@@ -1105,17 +1124,17 @@ label.switch:has(input:checked)::before {
 }
 
 .download-item-status.status-success {
-    color: #FFD700; 
+    color: var(--c-accent-secondary);
     font-weight: bold;
 }
 
 .download-item-status.status-installed {
-    color: #4CAF50; /* Green for installed */
+    color: var(--c-status-success);
     font-weight: bold;
 }
 
 .download-item-status.status-error {
-    color: var(--danger-color); /* Red for error */
+    color: var(--c-danger);
     font-weight: bold;
 }
 
@@ -1180,7 +1199,7 @@ label.switch:has(input:checked)::before {
 
 .slider-value {
     font-size: 14px;
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     width: 40px; /* Give it a fixed width to prevent layout shifts */
     text-align: right;
 }
@@ -1221,7 +1240,7 @@ button.context-menu-item {
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    color: var(--text-color);
+    color: var(--c-text-primary);
     cursor: pointer;
     display: block;
     font-size: 14px; 
@@ -1233,17 +1252,15 @@ button.context-menu-item {
 }
 
 button.context-menu-item:hover {
-    background-color: rgba(125, 33, 88, 1);
-    color: white;
+    background-color: var(--c-accent-primary);
 }
 
 button.context-menu-item.delete {
-    color: var(--text-color);
+    color: var(--c-text-primary);
 }
 
 button.context-menu-item.delete:hover {
-    background-color: var(--danger-hover-color);
-    color: white;
+    background-color: var(--c-danger-hover);
 }
 
 /* === FIX FOR NEW VIEW LAYOUT === */
@@ -1270,13 +1287,13 @@ button.context-menu-item.delete:hover {
 }
 
 .styled-select:hover {
-    border-color: var(--accent-color);
+    border-color: var(--c-accent-primary);
 }
 
 /* Style for the dropdown options list */
 .styled-select option {
-    background-color: #2a2a2a;
-    color: var(--text-color);
+    background-color: #1D1D1D;
+    color: var(--c-text-primary);
 }
 
 /* --- Main Navigation (Tabs) --- */
@@ -1297,7 +1314,7 @@ button.context-menu-item.delete:hover {
 .nav-button {
     font-family: var(--font-primary);
     font-size: 14pt;
-    color: var(--text-color);
+    color: var(--c-text-primary);
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 8px 30px;
@@ -1316,10 +1333,10 @@ button.context-menu-item.delete:hover {
     border-left-width: 0.5px;
 }
 .nav-button.active {
-    background-color: rgba(241, 232, 209, 0.15);
-    border-color: var(--accent-color);
+    background-color: rgba(105, 59, 79, 0.15);
+    border-color: var(--c-accent-primary);
     opacity: 1;
-    text-shadow: 0 0 5px var(--accent-color);
+    text-shadow: 0 0 5px var(--c-accent-primary);
 }
 .nav-button:hover:not(.active) {
     background-color: rgba(255, 255, 255, 0.1);
@@ -1334,26 +1351,26 @@ button.context-menu-item.delete:hover {
 }
 .themed-input {
     font-family: var(--font-secondary);
-    color: var(--text-color);
+    color: var(--c-text-primary);
     font-size: 14px;
     padding: 8px 12px;
     
-    background-color: rgba(60, 60, 60, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--c-border);
     border-radius: 4px;
     outline: none;
     transition: border-color 0.2s;
 }
 
 .themed-input:hover {
-    border-color: var(--accent-color);
+    border-color: var(--c-border-interactive);
 }
 #browseSearchInput {
     flex-grow: 1;
 }
 #browseSearchInput:hover,
 .styled-select:hover {
-    border-color: var(--accent-color);
+    border-color: var(--c-accent-primary);
 }
 .browse-grid {
     display: flex;
@@ -1369,14 +1386,19 @@ button.context-menu-item.delete:hover {
 /* --- Mod Card Styles --- */
 .mod-card {
     position: relative;
-    background-color: rgba(60, 60, 60, 0.6);
+    background-color: var(--c-bg-mod-row);
     border-radius: 4px;
     overflow: hidden;
     display: flex;
     flex-direction: row; /* Lay out image and body horizontally */
     border: 1px solid transparent;
-    transition: border-color 0.3s ease-in-out; 
+    transition: all 0.2s ease-in-out;
     flex-shrink: 0; /* Prevent cards from shrinking */
+}
+
+.mod-card.selected {
+    background-color: rgba(0, 0, 0, 0.4); /* A darker, more prominent background */
+    border-color: var(--c-accent-primary); /* Use the accent border color */
 }
 
 .mod-card-installed-badge {
@@ -1396,7 +1418,7 @@ button.context-menu-item.delete:hover {
     left: 0;
     width: 100%;
     height: 100%;
-    background: #4CAF50; /* The main green ribbon color */
+    background: var(--c-status-success);
     clip-path: polygon(0 0, 100% 0, 0 100%);
     box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
@@ -1411,7 +1433,7 @@ button.context-menu-item.delete:hover {
 }
 
 .mod-card.is-installed .mod-card-thumbnail {
-    border: 3px solid #4CAF50; /* Border color */
+    border: 3px solid var(--c-status-success);
     box-sizing: border-box; 
 }
 
@@ -1422,7 +1444,7 @@ button.context-menu-item.delete:hover {
 }
 
 .mod-card:hover {
-    border-color: var(--accent-color);
+    border-color: var(--c-accent-primary);
 }
 
 .mod-card-version-inline {
@@ -1434,7 +1456,7 @@ button.context-menu-item.delete:hover {
 
 /* --- ADD THIS NEW RULE --- */
 .mod-card.has-warning .mod-card-title {
-    color: #FFD700; /* A gold/yellow color for the title text */
+    color: var(--c-accent-secondary);
 }
 .mod-card-title .warning-icon {
     cursor: help; /* Changes the cursor to a question mark to indicate a tooltip */
@@ -1492,7 +1514,7 @@ button.context-menu-item.delete:hover {
     justify-content: space-between;
     font-size: 11px;
     font-weight: bold;
-    color: var(--text-color);
+    color: var(--c-text-primary);
     opacity: 0.7;
 }
 .mod-card-summary {
@@ -1508,8 +1530,8 @@ button.context-menu-item.delete:hover {
 }
 .mod-card-install-btn {
     font-family: var(--font-primary);
-    background-color: var(--accent-color);
-    color: #222;
+    background-color: var(--c-accent-primary);
+    color: var(--c-text-primary);
     border: none;
     border-radius: 4px;
     padding: 8px;
@@ -1519,7 +1541,8 @@ button.context-menu-item.delete:hover {
     transition: all 0.2s;
 }
 .mod-card-install-btn:hover {
-    background-color: white;
+    background-color: var(--c-accent-primary-hover);
+    filter: brightness(1.1);
 }
 .mod-card-install-btn:disabled {
     background-color: #555;
@@ -1557,13 +1580,36 @@ button.context-menu-item.delete:hover {
 }
    
 /* --- Side-by-Side Browse Layout --- */
-.browse-container {
+/* .browse-container {
     display: flex;
     flex-grow: 1;
-    min-height: 0; /* Flexbox fix for scrolling */
+    min-height: 0;
     margin-bottom: -5px;
     margin-left: -5px;
     margin-right: -5px;
+} */
+
+.browse-container {
+    display: flex;
+    flex-grow: 1;
+    min-height: 0;
+    position: relative; 
+}
+
+.browse-background-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* This is the key: it places the panel *behind* all other content */
+
+    /* --- Re-use the styles from your .list-panel for consistency --- */
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    background-color: var(--c-bg-panel);
+    border: 0px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0px;
 }
 
 .browse-main-content {
@@ -1615,7 +1661,7 @@ button.context-menu-item.delete:hover {
     font-family: var(--font-primary);
     margin: 0;
     font-size: 18pt;
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
 }
 
 .mod-detail-header img {
@@ -1713,7 +1759,7 @@ button.context-menu-item.delete:hover {
 .mod-detail-footer .modal-btn-cancel {
     background-color: transparent;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    color: var(--text-color);
+    color: var(--c-text-primary);
     padding: 8px 30px;
     border-radius: 4px;
     cursor: pointer;
@@ -1721,7 +1767,7 @@ button.context-menu-item.delete:hover {
 }
 .mod-detail-footer .modal-btn-cancel:hover {
     background-color: rgba(255, 255, 255, 0.1);
-    border-color: var(--accent-color);
+    border-color: var(--c-accent-primary);
 }
 
 /* --- NEW Styling for Injected Description Content --- */
@@ -1729,13 +1775,13 @@ button.context-menu-item.delete:hover {
 .mod-detail-description h2,
 .mod-detail-description h3 {
     font-family: var(--font-primary); /* Headings can still use the display font */
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     font-size: 14pt;
 }
 
 .mod-detail-description strong,
 .mod-detail-description b {
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     font-weight: 700; /* Use a heavier font-weight for Roboto */
 }
 
@@ -1752,7 +1798,7 @@ button.context-menu-item.delete:hover {
 }
 
 .mod-detail-description blockquote {
-    border-left: 3px solid var(--accent-color);
+    border-left: 3px solid var(--c-accent-primary);
     background-color: rgba(0, 0, 0, 0.2);
     padding: 10px 15px;
     border-radius: 4px;
@@ -1787,7 +1833,7 @@ button.context-menu-item.delete:hover {
 
 /* --- NEW Styling for Links --- */
 .mod-detail-description a {
-    color: var(--accent-color); /* Use your theme's accent color for links */
+    color: var(--c-accent-primary); /* Use your theme's accent color for links */
     text-decoration: none;      /* Remove the underline */
 }
 
@@ -1821,10 +1867,9 @@ button.context-menu-item.delete:hover {
 
 /* Style for the standout "Main File" */
 .primary-file-container {
-    border: 1px solid var(--accent-color);
+    border: 0px solid var(--c-accent-primary);
     border-radius: 4px;
     margin-bottom: 15px;
-    background-color: rgba(241, 232, 209, 0.05);
 }
 
 .primary-file-container .update-item-name {
@@ -1896,7 +1941,7 @@ button.context-menu-item.delete:hover {
     font-weight: bold;
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--text-color);
+    color: var(--c-text-primary);
     padding: 10px;
     border-radius: 4px;
     cursor: pointer;
@@ -1909,7 +1954,7 @@ button.context-menu-item.delete:hover {
 
 .detail-action-btn:hover {
     background-color: rgba(255, 255, 255, 0.15);
-    border-color: var(--accent-color);
+    border-color: var(--c-accent-primary);
 }
 
 /* --- Styling for the Changelog Modal --- */
@@ -1930,7 +1975,7 @@ button.context-menu-item.delete:hover {
 .changelog-version {
     font-family: var(--font-primary);
     font-size: 14pt;
-    color: var(--accent-color);
+    color: var(--c-accent-primary);
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     padding-bottom: 5px;
     margin-top: 20px;
@@ -1988,13 +2033,13 @@ button.context-menu-item.delete:hover {
 }
 
 .handler-status.status-success {
-    color: #4CAF50; /* A nice green for success */
+    color: var(--c-status-success);
 }
 
 .handler-status.status-error {
-    color: var(--danger-color); /* Use your existing theme's red for errors */
+    color: var(--c-danger);
 }
 
 .handler-status.status-info {
-    color: var(--accent-color); /* A neutral/informative color */
+    color: var(--c-accent-primary);
 }
