@@ -205,11 +205,9 @@ header {
 }
 
 .top-panel {
-	backdrop-filter: blur(1px);
 	background-color: var(--c-bg-panel);
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: 3px;
-	-webkit-backdrop-filter: blur(1px);
   margin-bottom: 15px;
   margin-top: 5px;
   flex-shrink: 0;
@@ -223,11 +221,9 @@ header {
 }
 
 .list-panel {
-	backdrop-filter: blur(1px);
 	background-color: var(--c-bg-panel);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: 3px;
-	-webkit-backdrop-filter: blur(1px);
   display: flex;
 	flex-direction: column;
 	flex-grow: 1;
@@ -375,7 +371,7 @@ h3,
 /* --- Button 1: Load GCMODSETTINGS --- */
 /* Tweak position of entire button */
 #loadFileBtn {
-    top: 50px;
+    top: 45px;
     left: 160px;
 }
 #loadFileBtn::before {
@@ -383,19 +379,19 @@ h3,
 }
 /* Tweak these to move the MAIN TEXT */
 #loadFileBtn-label {
-    top: 19px;
+    top: 14px;
     left: 72px;
 }
 /* Tweak these to move the SUB-TEXT */
 #filePathLabel {
-    top: 47px;
+    top: 43px;
     left: 85px;
 }
 
 /* --- Button 2: Open MODS Folder --- */
 /* Tweak these to move and resize the clickable ICON */
 #openModsFolderBtn {
-    top: 115px;
+    top: 110px;
     left: 190px;
 }
 #openModsFolderBtn::before {
@@ -403,7 +399,7 @@ h3,
 }
 /* Tweak these to move the MAIN TEXT */
 #openModsFolderBtn-label {
-    top: 110px;
+    top: 106px;
     left: 110px;
 }
 
@@ -752,7 +748,6 @@ label.switch:has(input:checked)::before {
 /* --- NEW INLINE MOD INFO PANEL --- */
 .mod-info-panel-inline {
     background-image: url('/src/assets/modinfopanel.png');
-    /* background-color: rgba(0, 0, 0, 0.4); */
     background-size: 100% 100%; /* Stretch the image to fill the div */
     background-position: center;
     background-repeat: no-repeat;
@@ -762,11 +757,8 @@ label.switch:has(input:checked)::before {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 
-    /* border: 1px solid rgba(255, 255, 255, 0.15); */
-    /* border-radius: 4px; */
     margin: 0 0 4px 0;
     overflow: hidden;
-    /* backdrop-filter: blur(2px); */
 
     /* Animation for expanding/collapsing */
     transition: all 0.4s ease-in-out;
@@ -1238,8 +1230,8 @@ label.switch:has(input:checked)::before {
    ========================================================================== */
 .context-menu {
     background-color: rgba(35, 35, 35, 0.95);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    /* backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px); */
     border-radius: 6px;
     filter: drop-shadow(1px 1px 7px black);
     min-width: 150px;
@@ -1608,11 +1600,7 @@ button.context-menu-item.delete:hover {
     left: -7.5px;
     width: 101.17%;
     height: 101.8%;
-    z-index: -1; /* This is the key: it places the panel *behind* all other content */
-
-    /* --- Re-use the styles from your .list-panel for consistency --- */
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
+    z-index: -1; 
     background-color: var(--c-bg-panel);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 3px;
