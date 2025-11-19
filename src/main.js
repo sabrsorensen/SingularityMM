@@ -4,7 +4,9 @@ import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { basename, join, resolveResource, appDataDir } from "@tauri-apps/api/path";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-const appWindow = getCurrentWindow()
+
+// Get the window instance for listener attachment
+const appWindow = getCurrentWindow();
 
 // --- Global State & Constants ---
 let NEXUS_API_KEY = "";
@@ -24,6 +26,54 @@ const CACHE_DURATION_MS = 60 * 60 * 1000;
 const changelogCache = new Map();
 
 document.addEventListener('DOMContentLoaded', () => {
+
+
+    // ============================================================
+    // DIAGNOSTIC TOOL START (Delete this block after fixing)
+    // ============================================================
+
+    console.log("--- DIAGNOSTICS STARTED ---");
+
+    // TEST 1: Native Browser Drag Detection
+    // If the screen turns RED when you drag a file, the browser IS detecting the file.
+    // If it does NOT turn red, something (like an invisible panel) is blocking it.
+    document.body.addEventListener('dragover', (e) => {
+        e.preventDefault(); // Mandatory to allow dropping
+        e.stopPropagation();
+        document.body.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Turn RED
+        console.log("NATIVE JS: Drag detected over:", e.target);
+    });
+
+    document.body.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        document.body.style.backgroundColor = ""; // Reset color
+    });
+
+    document.body.addEventListener('drop', (e) => {
+        e.preventDefault();
+        document.body.style.backgroundColor = "rgba(0, 255, 0, 0.5)"; // Turn GREEN
+        console.log("NATIVE JS: File Dropped!", e.dataTransfer.files);
+        setTimeout(() => document.body.style.backgroundColor = "", 500);
+    });
+
+    // TEST 2: Invisible Wall Detector
+    // Every 2 seconds, this logs what element is in the center of the screen.
+    // Look at your Console logs. If it says "modal-overlay", that is your invisible blocker.
+    setInterval(() => {
+        const x = window.innerWidth / 2;
+        const y = window.innerHeight / 2;
+        const element = document.elementFromPoint(x, y);
+        if (element) {
+            console.log(`ELEMENT UNDER CENTER (${x}x${y}):`, element.className || element.tagName, element);
+        }
+    }, 2000);
+
+    // ============================================================
+    // DIAGNOSTIC TOOL END
+    // ============================================================
+
+
+
     // --- Application & UI State ---
     const appState = {
         gamePath: null,
@@ -47,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dragTimer: null,
         selectedModNameBeforeDrag: null,
     };
-    
+
     const scrollState = {
         isScrollingUp: false,
         isScrollingDown: false,
@@ -55,90 +105,90 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let contextMenu = null;
-    
+
     const downloadSortState = {
-        key: 'date', 
+        key: 'date',
         direction: 'desc'
     };
 
     // --- UI Element References ---
     const loadFileBtn = document.getElementById('loadFileBtn'),
-          openModsFolderBtn = document.getElementById('openModsFolderBtn'),
-          filePathLabel = document.getElementById('filePathLabel'),
-          disableAllSwitch = document.getElementById('disableAllSwitch'),
-          modListContainer = document.getElementById('modListContainer'),
-          settingsBtn = document.getElementById('settingsBtn'),
-          settingsModalOverlay = document.getElementById('settingsModalOverlay'),
-          closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn'),
-          rowPaddingSlider = document.getElementById('rowPaddingSlider'),
-          rowPaddingValue = document.getElementById('rowPaddingValue'),
-          deleteSettingsBtn = document.getElementById('deleteSettingsBtn'),
-          dropZone = document.getElementById('dropZone'),
-          searchModsInput = document.getElementById('searchModsInput'),
-          languageSelector = document.getElementById('languageSelector'),
-          enableAllBtn = document.getElementById('enableAllBtn'),
-          disableAllBtn = document.getElementById('disableAllBtn'),
-          customCloseBtn = document.getElementById('customCloseBtn'),
-          modInfoPanel = document.getElementById('modInfoPanel'),
-          infoModName = document.getElementById('infoModName'),
-          infoAuthor = document.getElementById('infoAuthor'),
-          infoInstalledVersion = document.getElementById('infoInstalledVersion'),
-          infoLatestVersion = document.getElementById('infoLatestVersion'),
-          infoDescription = document.getElementById('infoDescription'),
-          infoNexusLink = document.getElementById('infoNexusLink'),
-          updateCheckBtn = document.getElementById('updateCheckBtn'),
-          updateModalOverlay = document.getElementById('updateModalOverlay'),
-          updateListContainer = document.getElementById('updateListContainer'),
-          closeUpdateModalBtn = document.getElementById('closeUpdateModalBtn'),
-          navMyMods = document.getElementById('navMyMods'),
-          navBrowse = document.getElementById('navBrowse'),
-          myModsView = document.getElementById('myModsView'),
-          browseView = document.getElementById('browseView'),
-          browseGridContainer = document.getElementById('browseGridContainer'),
-          fileSelectionModalOverlay = document.getElementById('fileSelectionModalOverlay'),
-          fileSelectionModalTitle = document.getElementById('fileSelectionModalTitle'),
-          fileSelectionListContainer = document.getElementById('fileSelectionListContainer'),
-          closeFileSelectionModalBtn = document.getElementById('closeFileSelectionModalBtn'),
-          browseSearchInput = document.getElementById('browseSearchInput'),
-          browseSortSelect = document.getElementById('browseSortSelect'),
-          browseFilterSelect = document.getElementById('browseFilterSelect'),
-          modDetailPanel = document.getElementById('modDetailPanel'),
-          modDetailCloseBtn = document.getElementById('modDetailCloseBtn'),
-          modDetailName = document.getElementById('modDetailName'),
-          modDetailAuthor = document.getElementById('modDetailAuthor'),
-          modDetailImage = document.getElementById('modDetailImage'),
-          modDetailVersion = document.getElementById('modDetailVersion'),
-          modDetailUpdated = document.getElementById('modDetailUpdated'),
-          modDetailDownloads = document.getElementById('modDetailDownloads'),
-          modDetailEndorsements = document.getElementById('modDetailEndorsements'),
-          modDetailDescription = document.getElementById('modDetailDescription'),
-          modDetailInstallBtnContainer = document.getElementById('modDetailInstallBtnContainer'),
-          modDetailSecondaryActions = document.getElementById('modDetailSecondaryActions'),
-          modDetailInstalled = document.getElementById('modDetailInstalled'),
-          modDetailCreated = document.getElementById('modDetailCreated'),
-          changelogModalOverlay = document.getElementById('changelogModalOverlay'),
-          changelogModalTitle = document.getElementById('changelogModalTitle'),
-          changelogListContainer = document.getElementById('changelogListContainer'),
-          closeChangelogModalBtn = document.getElementById('closeChangelogModalBtn'),
-          priorityModalOverlay = document.getElementById('priorityModalOverlay'),
-          priorityModalTitle = document.getElementById('priorityModalTitle'),
-          priorityModalDescription = document.getElementById('priorityModalDescription'),
-          priorityInput = document.getElementById('priorityInput'),
-          confirmPriorityBtn = document.getElementById('confirmPriorityBtn'),
-          cancelPriorityBtn = document.getElementById('cancelPriorityBtn'),
-          downloadHistoryBtn = document.getElementById('downloadHistoryBtn'),
-          downloadHistoryModalOverlay = document.getElementById('downloadHistoryModalOverlay'),
-          downloadListContainer = document.getElementById('downloadListContainer'),
-          closeDownloadHistoryBtn = document.getElementById('closeDownloadHistoryBtn'),
-          clearDownloadHistoryBtn = document.getElementById('clearDownloadHistoryBtn'),
-          nxmHandlerBtn = document.getElementById('nxmHandlerBtn'),
-          confirmationModalOverlay = document.getElementById('confirmationModalOverlay'),
-          confirmationModalTitle = document.getElementById('confirmationModalTitle'),
-          confirmationModalDescription = document.getElementById('confirmationModalDescription'),
-          confirmActionBtn = document.getElementById('confirmActionBtn'),
-          cancelActionBtn = document.getElementById('cancelActionBtn'),
-          gridGapSlider = document.getElementById('gridGapSlider'),
-          gridGapValue = document.getElementById('gridGapValue');
+        openModsFolderBtn = document.getElementById('openModsFolderBtn'),
+        filePathLabel = document.getElementById('filePathLabel'),
+        disableAllSwitch = document.getElementById('disableAllSwitch'),
+        modListContainer = document.getElementById('modListContainer'),
+        settingsBtn = document.getElementById('settingsBtn'),
+        settingsModalOverlay = document.getElementById('settingsModalOverlay'),
+        closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn'),
+        rowPaddingSlider = document.getElementById('rowPaddingSlider'),
+        rowPaddingValue = document.getElementById('rowPaddingValue'),
+        deleteSettingsBtn = document.getElementById('deleteSettingsBtn'),
+        dropZone = document.getElementById('dropZone'),
+        searchModsInput = document.getElementById('searchModsInput'),
+        languageSelector = document.getElementById('languageSelector'),
+        enableAllBtn = document.getElementById('enableAllBtn'),
+        disableAllBtn = document.getElementById('disableAllBtn'),
+        customCloseBtn = document.getElementById('customCloseBtn'),
+        modInfoPanel = document.getElementById('modInfoPanel'),
+        infoModName = document.getElementById('infoModName'),
+        infoAuthor = document.getElementById('infoAuthor'),
+        infoInstalledVersion = document.getElementById('infoInstalledVersion'),
+        infoLatestVersion = document.getElementById('infoLatestVersion'),
+        infoDescription = document.getElementById('infoDescription'),
+        infoNexusLink = document.getElementById('infoNexusLink'),
+        updateCheckBtn = document.getElementById('updateCheckBtn'),
+        updateModalOverlay = document.getElementById('updateModalOverlay'),
+        updateListContainer = document.getElementById('updateListContainer'),
+        closeUpdateModalBtn = document.getElementById('closeUpdateModalBtn'),
+        navMyMods = document.getElementById('navMyMods'),
+        navBrowse = document.getElementById('navBrowse'),
+        myModsView = document.getElementById('myModsView'),
+        browseView = document.getElementById('browseView'),
+        browseGridContainer = document.getElementById('browseGridContainer'),
+        fileSelectionModalOverlay = document.getElementById('fileSelectionModalOverlay'),
+        fileSelectionModalTitle = document.getElementById('fileSelectionModalTitle'),
+        fileSelectionListContainer = document.getElementById('fileSelectionListContainer'),
+        closeFileSelectionModalBtn = document.getElementById('closeFileSelectionModalBtn'),
+        browseSearchInput = document.getElementById('browseSearchInput'),
+        browseSortSelect = document.getElementById('browseSortSelect'),
+        browseFilterSelect = document.getElementById('browseFilterSelect'),
+        modDetailPanel = document.getElementById('modDetailPanel'),
+        modDetailCloseBtn = document.getElementById('modDetailCloseBtn'),
+        modDetailName = document.getElementById('modDetailName'),
+        modDetailAuthor = document.getElementById('modDetailAuthor'),
+        modDetailImage = document.getElementById('modDetailImage'),
+        modDetailVersion = document.getElementById('modDetailVersion'),
+        modDetailUpdated = document.getElementById('modDetailUpdated'),
+        modDetailDownloads = document.getElementById('modDetailDownloads'),
+        modDetailEndorsements = document.getElementById('modDetailEndorsements'),
+        modDetailDescription = document.getElementById('modDetailDescription'),
+        modDetailInstallBtnContainer = document.getElementById('modDetailInstallBtnContainer'),
+        modDetailSecondaryActions = document.getElementById('modDetailSecondaryActions'),
+        modDetailInstalled = document.getElementById('modDetailInstalled'),
+        modDetailCreated = document.getElementById('modDetailCreated'),
+        changelogModalOverlay = document.getElementById('changelogModalOverlay'),
+        changelogModalTitle = document.getElementById('changelogModalTitle'),
+        changelogListContainer = document.getElementById('changelogListContainer'),
+        closeChangelogModalBtn = document.getElementById('closeChangelogModalBtn'),
+        priorityModalOverlay = document.getElementById('priorityModalOverlay'),
+        priorityModalTitle = document.getElementById('priorityModalTitle'),
+        priorityModalDescription = document.getElementById('priorityModalDescription'),
+        priorityInput = document.getElementById('priorityInput'),
+        confirmPriorityBtn = document.getElementById('confirmPriorityBtn'),
+        cancelPriorityBtn = document.getElementById('cancelPriorityBtn'),
+        downloadHistoryBtn = document.getElementById('downloadHistoryBtn'),
+        downloadHistoryModalOverlay = document.getElementById('downloadHistoryModalOverlay'),
+        downloadListContainer = document.getElementById('downloadListContainer'),
+        closeDownloadHistoryBtn = document.getElementById('closeDownloadHistoryBtn'),
+        clearDownloadHistoryBtn = document.getElementById('clearDownloadHistoryBtn'),
+        nxmHandlerBtn = document.getElementById('nxmHandlerBtn'),
+        confirmationModalOverlay = document.getElementById('confirmationModalOverlay'),
+        confirmationModalTitle = document.getElementById('confirmationModalTitle'),
+        confirmationModalDescription = document.getElementById('confirmationModalDescription'),
+        confirmActionBtn = document.getElementById('confirmActionBtn'),
+        cancelActionBtn = document.getElementById('cancelActionBtn'),
+        gridGapSlider = document.getElementById('gridGapSlider'),
+        gridGapValue = document.getElementById('gridGapValue');
 
     // --- Core Application Logic ---
 
@@ -247,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Failed to save curated list to cache:", error);
         }
     }
-    
+
     /**
      * Fetches the single source of truth for all mod data from the GitHub Action's output.
      */
@@ -266,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // We can now remove the cache-busting timestamp from the URL
             const response = await fetch(CURATED_LIST_URL);
             if (!response.ok) throw new Error("Could not fetch remote curated list.");
-            
+
             const freshData = await response.json();
             curatedData = freshData;
             console.log(`Successfully loaded ${curatedData.length} mods from network.`);
@@ -394,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     appState.installedModsMap.get(modIdStr).set(String(file_id), version);
                 }
             }
-            
+
             // Build the HTML for the row
             const row = document.createElement('div');
             row.className = 'mod-row';
@@ -411,10 +461,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Attach the event listener for the checkbox
             row.querySelector('.enabled-switch').addEventListener('change', (e) => {
                 const modNode = Array.from(appState.xmlDoc.querySelectorAll('Property[name="Data"] > Property'))
-                                    .find(node => {
-                                        const nameProp = node.querySelector('Property[name="Name"]');
-                                        return nameProp && nameProp.getAttribute('value').toUpperCase() === modData.folder_name.toUpperCase();
-                                    });
+                    .find(node => {
+                        const nameProp = node.querySelector('Property[name="Name"]');
+                        return nameProp && nameProp.getAttribute('value').toUpperCase() === modData.folder_name.toUpperCase();
+                    });
                 if (modNode) {
                     const newVal = e.target.checked ? 'true' : 'false';
                     const eNode = modNode.querySelector('Property[name="Enabled"]');
@@ -443,15 +493,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const modName = row.dataset.modName;
             // Find the XML node corresponding to this row
             const modNode = Array.from(appState.xmlDoc.querySelectorAll('Property[name="Data"] > Property'))
-                                .find(node => {
-                                    const nameProp = node.querySelector('Property[name="Name"]');
-                                    return nameProp && nameProp.getAttribute('value').toUpperCase() === modName.toUpperCase();
-                                });
+                .find(node => {
+                    const nameProp = node.querySelector('Property[name="Name"]');
+                    return nameProp && nameProp.getAttribute('value').toUpperCase() === modName.toUpperCase();
+                });
 
             if (modNode) {
                 // Get the latest "enabled" state from the XML
                 const isEnabled = modNode.querySelector('Property[name="Enabled"]')?.getAttribute('value').toLowerCase() === 'true';
-                
+
                 // Find the checkbox in this row and update its state
                 const checkbox = row.querySelector('.enabled-switch');
                 if (checkbox && checkbox.checked !== isEnabled) {
@@ -561,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatDate(timestamp) {
         if (!timestamp) return '...';
         // The timestamp from Rust is in seconds, JS Date needs milliseconds
-        const date = new Date(timestamp * 1000); 
+        const date = new Date(timestamp * 1000);
         return date.toLocaleDateString(); // Uses the user's local date format
     }
 
@@ -594,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function startModDownload({ modId, fileId, version, fileName, displayName }, isUpdate = false) {
         const existingItem = downloadHistory.find(d => d.fileId === fileId);
-        
+
         if (existingItem && existingItem.archivePath && !isUpdate) {
             const confirmed = await showConfirmationModal(
                 'Duplicate Download',
@@ -609,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderDownloadHistory();
                 return;
             }
-            
+
             downloadHistory = downloadHistory.filter(d => d.fileId !== fileId);
         }
 
@@ -676,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showDownloadContextMenu(e, downloadId) {
         const itemData = downloadHistory.find(d => d.id === downloadId);
-        
+
         console.log(`[CONTEXT MENU] Opening for downloadId: "${downloadId}"`);
 
         if (!itemData) {
@@ -686,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Log the complete state of the item we're opening the menu for.
         console.log("[CONTEXT MENU] Item data:", JSON.parse(JSON.stringify(itemData)));
-        
+
         e.preventDefault();
         e.stopPropagation();
         removeContextMenu();
@@ -718,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         nexusButton.onclick = () => {
             invoke('plugin:shell|open', {
                 path: `https://www.nexusmods.com/nomanssky/mods/${itemData.modId}`,
-                with: null 
+                with: null
             });
         };
         contextMenu.appendChild(nexusButton);
@@ -731,7 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
             revealButton.onclick = () => invoke('show_in_folder', { path: itemData.archivePath });
             contextMenu.appendChild(revealButton);
         }
-        
+
         // Delete Button
         const deleteButton = document.createElement('button');
         deleteButton.textContent = 'Delete';
@@ -761,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             updateStatus(isUpdate ? 'Auto-Installing Update...' : 'Installing...', 'progress');
-            
+
             // This is the core Rust command that extracts and moves the mod.
             const analysis = await invoke('install_mod_from_archive', { archivePathStr: item.archivePath });
 
@@ -810,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             version: item.version
                         });
                         // The new folder name after replacement
-                        item.modFolderName = conflict.new_mod_name; 
+                        item.modFolderName = conflict.new_mod_name;
                     }
                 }
             }
@@ -829,11 +879,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // The new folder name after installation
                 item.modFolderName = analysis.successes[0].name;
             }
-            
+
             // Save changes to GCMODSETTINGS.MXML and re-render the main mod list
             await saveChanges();
             await renderModList();
-            
+
             updateStatus('Installed', 'installed');
             await saveDownloadHistory(downloadHistory);
 
@@ -861,12 +911,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemIndex === -1) return;
 
         const item = downloadHistory[itemIndex];
-        
+
         try {
             if (item.archivePath) {
                 await invoke('delete_archive_file', { path: item.archivePath });
             }
-            
+
             downloadHistory.splice(itemIndex, 1);
             renderDownloadHistory();
             await saveDownloadHistory(downloadHistory);
@@ -874,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Failed to delete archive: ${error}`);
         }
     }
-    
+
     function updateModDisplayState(modId) {
         const modIdStr = String(modId);
         const installedFiles = appState.installedModsMap.get(modIdStr);
@@ -902,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (card) {
             console.log(`Updating grid card for modId: ${modIdStr}. Is installed: ${isInstalled}`);
             const badge = card.querySelector('.mod-card-installed-badge');
-            
+
             // Use classList.toggle for a clean add/remove based on the isInstalled boolean
             card.classList.toggle('is-installed', isInstalled);
             if (badge) {
@@ -921,7 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await checkForUpdates(true);
         }
     }
-    
+
     async function loadDownloadHistory() {
         try {
             const dataDir = await appDataDir();
@@ -978,38 +1028,38 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const itemData of downloadHistory) {
             const newItem = template.content.cloneNode(true).firstElementChild;
             newItem.dataset.downloadId = itemData.id;
-            
+
             if (itemData.statusClass === 'success' && itemData.archivePath) {
                 newItem.classList.add('installable');
             }
-            
+
             const displayName = (itemData.displayName && itemData.version)
                 ? `${itemData.displayName} (${itemData.version})`
                 : itemData.fileName;
             const nameEl = newItem.querySelector('.download-item-name');
             nameEl.textContent = displayName;
             nameEl.setAttribute('title', displayName);
-            
+
             newItem.querySelector('.download-item-status').textContent = itemData.statusText;
             newItem.querySelector('.download-item-size').textContent = formatBytes(itemData.size);
-            
+
             const timestamp = itemData.createdAt || parseInt(itemData.id.split('-')[1], 10) / 1000;
             newItem.querySelector('.download-item-date').textContent = formatDate(timestamp);
-            
+
             const statusEl = newItem.querySelector('.download-item-status');
             statusEl.className = 'download-item-status';
             statusEl.classList.add(`status-${itemData.statusClass}`);
-            
+
             newItem.addEventListener('dblclick', () => {
                 if (newItem.classList.contains('installable')) {
                     handleDownloadItemInstall(itemData.id);
                 }
             });
             newItem.addEventListener('contextmenu', (e) => showDownloadContextMenu(e, itemData.id));
-            
+
             downloadListContainer.appendChild(newItem);
         }
-        
+
         const headerRow = document.querySelector('.download-header-row');
         if (headerRow) {
             headerRow.querySelectorAll('.sortable').forEach(header => {
@@ -1041,7 +1091,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleNxmLink(link) {
         console.log(`Frontend received nxm link: ${link}`);
-        
+
         const match = link.match(/nxm:\/\/nomanssky\/mods\/(\d+)\/files\/(\d+)/);
         if (!match || match.length < 3) {
             alert('Error: The received Nexus link was malformed.');
@@ -1082,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Load the perfectly sorted XML returned by the backend. This refreshes our state.
             await loadXmlContent(updatedXmlContent, appState.currentFilePath);
-            
+
             // 3. The renderModList() called by loadXmlContent will automatically redraw the UI.
             // No need to call saveChanges() here, as the backend has already saved the file implicitly
             // by returning the content for us to manage. We just need to write it.
@@ -1137,7 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const modNodes = appState.xmlDoc.querySelectorAll('Property[name="Data"] > Property[value="GcModSettingsInfo"]');
         if (modNodes.length === 0) return;
-        
+
         const newValue = enabled ? 'true' : 'false';
         modNodes.forEach(modNode => {
             const enabledNode = modNode.querySelector('Property[name="Enabled"]');
@@ -1145,13 +1195,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (enabledNode) enabledNode.setAttribute('value', newValue);
             if (enabledVRNode) enabledVRNode.setAttribute('value', newValue);
         });
-        
+
         // Save the changes to the XML in memory
         saveChanges();
-        
+
         // THIS IS THE FIX:
         // Instead of rebuilding the whole list, just update the checkboxes.
-        updateModListStates(); 
+        updateModListStates();
     };
 
     const addNewModToXml = (modName) => {
@@ -1201,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const escapeXml = (unsafe) => unsafe.replace(/[<>"'&]/g, char => ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;', '&': '&amp;' }[char]));
     const unescapeXml = (safe) => safe.replace(/&lt;|&gt;|&quot;|&apos;|&amp;/g, entity => ({ '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&' }[entity]));
-    
+
     function isNewerVersionAvailable(installedVersion, latestVersion) {
         if (!installedVersion || !latestVersion) {
             return false;
@@ -1417,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         }
     }
-    
+
     function displayChangelogs(modName, changelogs) {
         changelogModalTitle.textContent = `Changelogs: ${modName}`;
         changelogListContainer.innerHTML = '';
@@ -1448,7 +1498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         changelogModalOverlay.classList.remove('hidden');
     }
 
-    // --- Drag and Drop Logic ---
+    // --- Drag and Drop Logic (Row Reordering) ---
     function autoScrollLoop() {
         if (scrollState.isScrollingUp) modListContainer.scrollTop -= SCROLL_SPEED;
         if (scrollState.isScrollingDown) modListContainer.scrollTop += SCROLL_SPEED;
@@ -1493,7 +1543,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dropTarget && dragState.placeholder.parentNode) {
             dragState.placeholder.parentNode.insertBefore(dragState.draggedElement, dragState.placeholder);
             const finalModOrder = Array.from(modListContainer.querySelectorAll('.mod-row')).map(row => row.dataset.modName);
-        
+
             // 1. Immediately update the UI with no blink.
             reorderModListUI(finalModOrder);
 
@@ -1509,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(error => {
                     alert(`Error saving new mod order: ${error}`);
                     // If saving fails, we should probably re-render to revert the UI change.
-                    renderModList(); 
+                    renderModList();
                 });
         } else {
             renderModList();
@@ -1522,7 +1572,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dragState.draggedElement = null;
         dragState.ghostElement = null;
         dragState.placeholder = null;
-        
+
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
 
@@ -1596,7 +1646,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if this mod is in our map of installed mods.
             const modIdStr = String(modData.mod_id);
             if (appState.installedModsMap.has(modIdStr)) {
-                
+
                 // 1. Add the 'is-installed' class to the main card to trigger the border.
                 card.classList.add('is-installed');
 
@@ -1605,10 +1655,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // --- END OF NEW LOGIC ---
             const titleElement = card.querySelector('.mod-card-title');
-            
+
             card.querySelector('.mod-card-thumbnail').src = modData.picture_url || '/src/assets/placeholder.png';
             titleElement.title = modData.name;
-            
+
             const versionSpan = `<span class="mod-card-version-inline">${modData.version || ''}</span>`;
             let titleHtml = modData.name + versionSpan;
 
@@ -1619,7 +1669,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     titleHtml = warningIconHtml + titleHtml;
                 }
             }
-            
+
             titleElement.innerHTML = titleHtml;
             card.querySelector('.mod-card-summary').textContent = modData.summary || 'No summary available.';
             card.querySelector('.mod-card-author').textContent = `by ${modData.author}`;
@@ -1659,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const installedFileId of installedFiles.keys()) {
                 // Find the full data for this installed file from our curated list.
                 const fileData = allModFilesFromCurated.find(f => String(f.file_id) === installedFileId);
-                
+
                 // If we find its data and its category is "MAIN"...
                 if (fileData && fileData.category_name === 'MAIN') {
                     // ...we've found our priority version!
@@ -1680,7 +1730,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         modDetailInstalled.textContent = versionToShow;
         // --- END OF CORRECTION ---
-        
+
         modDetailInstallBtnContainer.innerHTML = '';
         const primaryBtn = document.createElement('button');
         primaryBtn.className = 'mod-card-install-btn';
@@ -1732,7 +1782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const createFileRow = (file) => {
             const item = document.createElement('div');
             item.className = 'update-item';
-            
+
             let buttonHtml = '';
             const installedFilesForThisMod = appState.installedModsMap.get(modIdStr);
             const fileIdStr = String(file.file_id);
@@ -1756,7 +1806,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (installedFileOnNexus && installedFileOnNexus.category_name === file.category_name) {
                             if (isNewerVersionAvailable(installedVersion, file.version)) {
                                 isUpdateForAnotherFile = true;
-                                break; 
+                                break;
                             }
                         }
                     }
@@ -1847,7 +1897,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             infoInstalledVersion.textContent = '...';
         }
-        
+
         // Now, find the remote info (this is also fast, as it's in memory)
         const modId = localModInfo?.mod_id;
         const remoteInfo = modId ? curatedData.find(m => String(m.mod_id) === String(modId)) : null;
@@ -1856,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         infoModName.textContent = remoteInfo?.name || modFolderName;
         infoAuthor.textContent = remoteInfo?.author || 'Unknown';
         infoDescription.textContent = remoteInfo?.summary || (localModInfo ? 'No description provided.' : 'No local mod info file found.');
-        
+
         // Logic to determine latest version
         let latestVersionToShow = remoteInfo?.version || 'N/A';
         if (remoteInfo && localModInfo?.file_id) {
@@ -1961,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     // Call the Rust command. It handles file deletion and returns the new data for the UI.
                     const modsToRender = await invoke('delete_mod', { modName: modName });
-                    
+
                     // Re-sync the in-memory XML document to reflect the deletion.
                     try {
                         const settingsPath = await join(appState.gamePath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
@@ -1970,10 +2020,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch (e) {
                         console.error("Failed to re-sync xmlDoc after deletion:", e);
                         // Force a reload to prevent a de-synced state, which is safer for the user.
-                        location.reload(); 
+                        location.reload();
                         return;
                     }
-                    
+
                     // Re-render the main mod list UI efficiently.
                     await renderModList(modsToRender);
 
@@ -1983,12 +2033,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Revert the status from "Installed" back to "Downloaded".
                         deletedItem.statusText = 'Downloaded';
                         deletedItem.statusClass = 'success';
-                        
+
                         const modIdToUpdate = deletedItem.modId;
-                        
+
                         // Clear the folder name association.
-                        deletedItem.modFolderName = null; 
-                        
+                        deletedItem.modFolderName = null;
+
                         // Save the updated download history.
                         await saveDownloadHistory(downloadHistory);
 
@@ -2081,7 +2131,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     enableAllBtn.addEventListener('click', () => setAllModsEnabled(true));
     disableAllBtn.addEventListener('click', () => setAllModsEnabled(false));
-    
+
     updateCheckBtn.addEventListener('click', async () => {
         await fetchCuratedData();
         await checkForUpdates(false);
@@ -2160,47 +2210,114 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const setupDragAndDrop = async () => {
-        // This listener handles the files when they are actually dropped onto the window.
-        // The payload is an array of file paths.
-        await listen('tauri://file-drop', async (event) => {
-            // Ignore file drops while a mod is being dragged for reordering
+        console.log("Setting up Drag & Drop listeners...");
+
+        // Helper to handle visual feedback (Highlight only)
+        const showHighlight = () => {
+            // We do NOT remove 'hidden' here because the app controls that based on game path
+            dropZone.classList.add('drag-over');
+        };
+
+        const hideHighlight = () => {
+            dropZone.classList.remove('drag-over');
+            // We do NOT add 'hidden' here. The dropzone should stay visible.
+        };
+
+        // --- 1. Hover Events ---
+        const onDragEnter = (event) => {
+            // Ignore if user is rearranging rows inside the list
             if (dragState.draggedElement) return;
 
-            dropZone.classList.remove('drag-over');
+            console.log("Drag enter detected");
+            showHighlight();
+        };
+
+        await appWindow.listen('tauri://file-drop-hover', onDragEnter);
+        await appWindow.listen('tauri://drag-enter', onDragEnter);
+
+        // --- 2. Cancel/Leave Events ---
+        const onDragLeave = () => {
+            console.log("Drag leave detected");
+            hideHighlight();
+        };
+
+        await appWindow.listen('tauri://file-drop-cancelled', onDragLeave);
+        await appWindow.listen('tauri://drag-leave', onDragLeave);
+
+        // --- 3. Drop Event ---
+        const onDrop = async (event) => {
+            console.log("File drop detected:", event);
+
+            // Ignore if user is rearranging rows
+            if (dragState.draggedElement) return;
+
+            // Remove highlight immediately
+            hideHighlight();
+
+            // Normalize Payload
+            let files = event.payload;
+            if (files && files.paths) {
+                files = files.paths;
+            }
+
+            // Validation
+            if (!files || !Array.isArray(files) || files.length === 0) {
+                console.warn("Drop ignored: Payload empty or invalid format", event);
+                return;
+            }
+
             if (!appState.xmlDoc) {
                 alert("Please load a GCMODSETTINGS.MXML file first.");
                 return;
             }
-            
-            const archiveFiles = event.payload.filter(p => p.toLowerCase().endsWith('.zip') || p.toLowerCase().endsWith('.rar'));
-            if (archiveFiles.length === 0) return;
 
-            // Your existing logic for processing the files is perfect and can be reused here.
+            // Filter for valid archives
+            const archiveFiles = files.filter(p =>
+                p.toLowerCase().endsWith('.zip') ||
+                p.toLowerCase().endsWith('.rar') ||
+                p.toLowerCase().endsWith('.7z')
+            );
+
+            if (archiveFiles.length === 0) {
+                console.log("Ignored drop: No valid archive files found.");
+                return;
+            }
+
+            // Process files
             for (const filePath of archiveFiles) {
                 const fileName = await basename(filePath);
                 try {
+                    console.log(`Processing dropped file: ${fileName}`);
+
+                    // Call Backend
                     const analysis = await invoke('install_mod_from_archive', { archivePathStr: filePath });
 
+                    // Handle Successful Installs
                     if (analysis.successes?.length > 0) {
                         for (const mod of analysis.successes) {
                             addNewModToXml(mod.name);
                             await checkForAndLinkMod(mod.name);
                         }
+                        await saveChanges();
+                        await renderModList();
                         alert(`Successfully installed ${analysis.successes.length} new mod(s) from ${fileName}.`);
                     }
 
+                    // Handle Conflicts
                     if (analysis.conflicts?.length > 0) {
                         for (const conflict of analysis.conflicts) {
                             const shouldReplace = await confirm(
                                 `A mod with this ID is already installed ('${conflict.old_mod_folder_name}'). Replace it with '${conflict.new_mod_name}'?`,
                                 { title: 'Mod Conflict', type: 'warning' }
                             );
+
                             await invoke('resolve_conflict', {
                                 newModName: conflict.new_mod_name,
                                 oldModFolderName: conflict.old_mod_folder_name,
                                 tempModPathStr: conflict.temp_path,
                                 replace: shouldReplace
                             });
+
                             if (shouldReplace) {
                                 if (conflict.new_mod_name.toUpperCase() !== conflict.old_mod_folder_name.toUpperCase()) {
                                     const updatedXmlContent = await invoke('update_mod_name_in_xml', {
@@ -2217,26 +2334,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 } catch (error) {
+                    console.error(`Error installing ${fileName}:`, error);
                     alert(`Error installing ${fileName}: ${error}`);
                 }
             }
-        });
+        };
 
-        // This listener adds the visual "drag-over" effect when files hover over the window.
-        await listen('tauri://file-drop-hover', () => {
-            if (dragState.draggedElement) return;
-            dropZone.classList.add('drag-over');
-        });
-
-        // This listener removes the visual effect when the dragged files leave the window.
-        await listen('tauri://file-drop-cancelled', () => {
-            if (dragState.draggedElement) return;
-            dropZone.classList.remove('drag-over');
-        });
+        await appWindow.listen('tauri://file-drop', onDrop);
+        await appWindow.listen('tauri://drag-drop', onDrop);
     };
-    
+
     languageSelector.addEventListener('change', (e) => i18n.loadLanguage(e.target.value));
-    
+
     navMyMods.addEventListener('click', () => {
         if (isPanelOpen) modDetailCloseBtn.click();
         navMyMods.classList.add('active');
@@ -2267,8 +2376,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const clickedCard = e.target.closest('.mod-card');
         if (clickedCard) {
             // Add 'selected' to the newly clicked card
-            clickedCard.classList.add('selected'); 
-            
+            clickedCard.classList.add('selected');
+
             const modId = parseInt(clickedCard.dataset.modId, 10);
             const modData = curatedData.find(m => m.mod_id === modId);
             if (modData) openModDetailPanel(modData);
@@ -2360,23 +2469,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('mod-card-install-btn')) {
             const button = e.target;
             const itemElement = button.closest('.update-item');
-            
+
             const isUpdate = button.textContent === 'UPDATE';
 
             const modId = button.dataset.modId;
             const fileId = button.dataset.fileId;
             const version = button.dataset.version;
-            
+
             // --- THIS IS THE FIX ---
             // 1. Get the CLEAN name from the UI for display purposes.
             const displayName = itemElement.querySelector('.update-item-name').textContent.split(' (v')[0];
-            
+
             // 2. Get the RAW filename from the data attribute we just added.
             const rawFileName = button.dataset.rawFilename;
 
             button.disabled = true;
             fileSelectionModalOverlay.classList.add('hidden');
-            
+
             // 3. Pass the correct variables to the download function.
             await startModDownload({
                 modId: modId,
@@ -2430,16 +2539,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirmed) {
             try {
                 console.log("User confirmed. Deleting all downloaded archives...");
-                
+
                 // 2. Call the new Rust command to wipe the downloads folder.
                 await invoke('clear_downloads_folder');
 
                 // 3. Clear the in-memory history array.
                 downloadHistory = [];
-                
+
                 // 4. Save the now-empty history array to the file.
                 await saveDownloadHistory(downloadHistory);
-                
+
                 // 5. Re-render the UI, which will now be empty.
                 renderDownloadHistory();
 
@@ -2514,7 +2623,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        
+
         nxmHandlerBtn.disabled = false; // Re-enable button
     });
 
@@ -2547,7 +2656,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- App Initialization ---
-    initializeApp();
-    setupDragAndDrop();
+
+    // Start the main application logic
+    initializeApp().catch(e => console.error("App Init failed:", e));
+
+    // Start the Drag and Drop logic (independent of app init)
+    setupDragAndDrop().catch(e => console.error("DragDrop Init failed:", e));
 
 });
