@@ -128,17 +128,14 @@
                                 <!-- Options injected via JS -->
                             </select>
                             <!-- The "Apply" button, hidden by default -->
-                            <button id="applyProfileBtn" class="apply-btn hidden" title="Apply Profile Change">
-                                ✔
-                            </button>
+                            <button id="applyProfileBtn" class="apply-btn hidden" title="Apply Profile Change"></button>
                         </div>
 
                         <div class="profile-actions-grid">
                             <button id="addProfileBtn" class="profile-btn">Add</button>
                             <button id="renameProfileBtn" class="profile-btn">Rename</button>
                             <button id="deleteProfileBtn" class="profile-btn">Delete</button>
-                            <button id="importProfileBtn" class="profile-btn">IMPORT</button>
-                            <button id="exportProfileBtn" class="profile-btn">EXPORT</button>
+                            <button id="openProfileManagerBtn" class="profile-manage-btn">MANAGE PROFILES</button>
                         </div>
                     </div>
                     <!-- CENTER COLUMN: DROP ZONE -->
@@ -428,6 +425,37 @@
                 </div>
 
                 <p id="profileTimeEst" style="font-size: 11px; opacity: 0.7; margin-top: 10px;">Calculating time...</p>
+            </div>
+        </div>
+        <!-- === PROFILE MANAGER MODAL === -->
+        <div id="profileManagerModal" class="modal-overlay hidden">
+            <div class="modal-content mp-modal">
+                <div class="mp-header">
+                    <img src="/src/assets/icon-troubleshoot.png" style="height: 20px; opacity: 0.7;">
+                    <span>PROFILES</span>
+                </div>
+
+                <div class="mp-body">
+                    <!-- Left: List -->
+                    <div class="mp-list-container">
+                        <ul id="mpProfileList" class="mp-list">
+                            <!-- List items injected via JS -->
+                        </ul>
+                    </div>
+
+                    <!-- Right: Buttons -->
+                    <div class="mp-buttons-col">
+                        <button id="mpCreateBtn" class="mp-btn">Create</button>
+                        <button id="mpCopyBtn" class="mp-btn">Copy</button>
+                        <button id="mpRemoveBtn" class="mp-btn">Remove</button>
+                        <button id="mpRenameBtn" class="mp-btn">Rename</button>
+                    </div>
+                </div>
+
+                <div class="mp-footer">
+                    <button id="mpSelectBtn" class="mp-action-btn">Select</button>
+                    <button id="mpCloseBtn" class="mp-action-btn">Close</button>
+                </div>
             </div>
         </div>
 </body>

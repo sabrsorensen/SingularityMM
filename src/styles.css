@@ -2396,33 +2396,52 @@ button.context-menu-item.delete:hover {
 .apply-btn {
     width: 30px;
     height: 30px;
-    background-color: var(--c-status-success);
+
+    /* Transparent background */
+    background-color: transparent;
     border: none;
-    border-radius: 4px;
-    color: white;
+
+    /* The Icon */
+    background-image: url('/src/assets/icon-installed.png');
+    background-size: 20px 20px;
+    /* Adjust size of the checkmark inside the button */
+    background-position: center;
+    background-repeat: no-repeat;
+
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    animation: pulse-green 2s infinite;
+
+    /* Initial State: Greenish glow to indicate "Go" */
+    filter: drop-shadow(0 0 2px var(--c-status-success));
+
+    /* The Pulse Animation */
+    animation: icon-pulse 2s infinite ease-in-out;
+    transition: filter 0.2s;
 }
 
 .apply-btn:hover {
-    filter: brightness(1.2);
+    /* Make it glow brighter on hover */
+    filter: drop-shadow(0 0 5px #fff) brightness(1.2);
+    animation: none;
+    /* Optional: Stop pulsing on hover so it feels solid */
+    transform: scale(1.1);
 }
 
-@keyframes pulse-green {
+@keyframes icon-pulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+        transform: scale(1);
+        filter: drop-shadow(0 0 2px var(--c-status-success));
     }
 
-    70% {
-        box-shadow: 0 0 0 6px rgba(76, 175, 80, 0);
+    50% {
+        transform: scale(1.15);
+        /* Grow slightly */
+        filter: drop-shadow(0 0 8px var(--c-status-success));
+        /* Glow stronger */
     }
 
     100% {
-        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+        transform: scale(1);
+        filter: drop-shadow(0 0 2px var(--c-status-success));
     }
 }
 
@@ -2433,32 +2452,17 @@ button.context-menu-item.delete:hover {
 */
 .profile-actions-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-columns: 1fr 1fr 1fr;
     width: 90%;
 }
 
-#addProfileBtn {
-    grid-column: span 2;
-}
-
-#renameProfileBtn {
-    grid-column: span 2;
-}
-
+#addProfileBtn,
+#renameProfileBtn,
 #deleteProfileBtn {
-    grid-column: span 2;
-}
-
-#importProfileBtn {
-    grid-column: span 3;
-    width: 100%;
-}
-
-/* Span 2 cols */
-#exportProfileBtn {
-    grid-column: span 3;
-    width: 100%;
+    grid-column: auto !important;
+    grid-area: auto !important;
+    width: auto !important;
+    /* Stop them from being 100% width */
 }
 
 .profile-btn {
@@ -2472,9 +2476,34 @@ button.context-menu-item.delete:hover {
     cursor: pointer;
     transition: all 0.2s;
     text-transform: uppercase;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .profile-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--c-accent-primary);
+}
+
+#openProfileManagerBtn {
+    /* Make it span all 3 columns */
+    grid-column: 1 / -1 !important;
+
+    /* Style it distinctively */
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--c-border);
+    color: var(--c-text-primary);
+    font-family: var(--font-primary);
+    font-size: 11pt;
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#openProfileManagerBtn:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: var(--c-accent-primary);
 }
@@ -2521,6 +2550,116 @@ button.context-menu-item.delete:hover {
 #closeUpdateModalBtn:hover,
 #confirmActionBtn:hover,
 #cancelActionBtn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--c-accent-primary);
+}
+
+/* --- Style Modal --- */
+.mp-modal {
+    width: 600px;
+    max-width: 95%;
+    padding: 0;
+    /* Reset default padding */
+    display: flex;
+    flex-direction: column;
+    background-color: var(--c-bg-modal);
+    border: 1px solid var(--c-border);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+.mp-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 15px;
+    background-color: var(--c-bg-modal);
+    border-bottom: 1px solid var(--c-border);
+    font-family: var(--font-primary);
+    font-size: 12pt;
+    color: var(--c-text-primary);
+}
+
+.mp-body {
+    display: flex;
+    padding: 15px;
+    gap: 15px;
+    height: 300px;
+    /* Fixed height for list */
+}
+
+.mp-list-container {
+    flex-grow: 1;
+    background-color: #1E1E1E;
+    border: 1px solid var(--c-border);
+    overflow-y: auto;
+}
+
+.mp-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.mp-list-item {
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: var(--font-secondary);
+    font-size: 10pt;
+    color: #ccc;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.mp-list-item:hover {
+    background-color: #333;
+}
+
+.mp-list-item.active {
+    background-color: var(--c-accent-primary);
+    /* Purple/Pink */
+    color: #fff;
+}
+
+.mp-buttons-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100px;
+}
+
+.mp-btn {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--c-border);
+    color: var(--c-text-primary);
+    padding: 5px;
+    cursor: pointer;
+    font-family: var(--font-secondary);
+    font-size: 10pt;
+}
+
+.mp-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--c-accent-primary);
+}
+
+.mp-footer {
+    padding: 10px 15px;
+    border-top: 1px solid var(--c-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--c-bg-modal);
+}
+
+.mp-action-btn {
+    padding: 5px 20px;
+    cursor: pointer;
+    font-family: var(--font-secondary);
+    border: 1px solid var(--c-border);
+    background-color: rgba(0, 0, 0, 0.3);
+    color: #fff;
+}
+
+.mp-action-btn:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: var(--c-accent-primary);
 }

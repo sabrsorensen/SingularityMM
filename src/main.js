@@ -2450,6 +2450,167 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ---------------------------------------------------------
+    // --- mp PROFILE MANAGER LOGIC (The "Manage" Button) ---
+    // ---------------------------------------------------------
+
+    const openProfileManagerBtn = document.getElementById('openProfileManagerBtn');
+    const profileManagerModal = document.getElementById('profileManagerModal');
+    const mpProfileList = document.getElementById('mpProfileList');
+
+    // State for the modal selection
+    let selectedProfileInModal = null;
+
+    // Helper: Render the list inside the modal
+    async function renderManagerList() {
+        const profiles = await invoke('list_profiles');
+        mpProfileList.innerHTML = '';
+
+        profiles.forEach(p => {
+            const li = document.createElement('li');
+            li.className = 'mp-list-item';
+            li.textContent = p;
+
+            // Highlight logic
+            if (p === selectedProfileInModal) li.classList.add('active');
+            else if (!selectedProfileInModal && p === appState.activeProfile) {
+                li.classList.add('active');
+                selectedProfileInModal = p;
+            }
+
+            // Click to select
+            li.onclick = () => {
+                document.querySelectorAll('.mp-list-item').forEach(el => el.classList.remove('active'));
+                li.classList.add('active');
+                selectedProfileInModal = p;
+            };
+
+            // Double click to "Select & Apply"
+            li.ondblclick = () => {
+                selectedProfileInModal = p;
+                document.getElementById('mpSelectBtn').click();
+            };
+
+            mpProfileList.appendChild(li);
+        });
+    }
+
+    // Open Modal
+    openProfileManagerBtn.addEventListener('click', async () => {
+        selectedProfileInModal = appState.activeProfile; // Reset selection to current active
+        await renderManagerList();
+        profileManagerModal.classList.remove('hidden');
+    });
+
+    // Close Modal Logic
+    const closeManager = () => profileManagerModal.classList.add('hidden');
+    document.getElementById('mpCloseBtn').addEventListener('click', closeManager);
+    // document.getElementById('closeProfileManagerX').addEventListener('click', closeManager);
+
+    // --- MODAL ACTION BUTTONS ---
+
+    // 1. CREATE (Inside Modal)
+    document.getElementById('mpCreateBtn').addEventListener('click', async () => {
+        const name = prompt("Enter new profile name:");
+        if (name && name.trim() !== "") {
+            try {
+                await invoke('create_empty_profile', { profileName: name });
+
+                // Update both lists
+                await renderManagerList();
+                await refreshProfileList();
+
+                // Auto-select the new one in modal
+                selectedProfileInModal = name;
+                renderManagerList();
+            } catch (e) { alert("Error: " + e); }
+        }
+    });
+
+    // 2. COPY (The new feature!)
+    document.getElementById('mpCopyBtn').addEventListener('click', async () => {
+        if (!selectedProfileInModal) return;
+
+        const newName = prompt(`Copy "${selectedProfileInModal}" to new profile named:`);
+        if (newName && newName.trim() !== "") {
+            try {
+                await invoke('copy_profile', {
+                    sourceName: selectedProfileInModal,
+                    newName: newName
+                });
+
+                await renderManagerList();
+                await refreshProfileList();
+
+                selectedProfileInModal = newName; // Select the copy
+                renderManagerList();
+            } catch (e) { alert("Error copying: " + e); }
+        }
+    });
+
+    // 3. RENAME (Inside Modal)
+    document.getElementById('mpRenameBtn').addEventListener('click', async () => {
+        if (!selectedProfileInModal) return;
+        if (selectedProfileInModal === 'Default') return alert("Cannot rename Default profile.");
+
+        const newName = prompt(`Rename ${selectedProfileInModal} to:`, selectedProfileInModal);
+        if (newName && newName !== selectedProfileInModal) {
+            try {
+                await invoke('rename_profile', { oldName: selectedProfileInModal, newName: newName });
+
+                // If we renamed the currently ACTIVE profile, update global state
+                if (appState.activeProfile === selectedProfileInModal) {
+                    appState.activeProfile = newName;
+                    localStorage.setItem('activeProfile', newName);
+                    // Update main dropdown selection too
+                    profileSelect.value = newName;
+                }
+
+                selectedProfileInModal = newName;
+                await renderManagerList();
+                await refreshProfileList();
+            } catch (e) { alert("Error renaming: " + e); }
+        }
+    });
+
+    // 4. REMOVE (Inside Modal)
+    document.getElementById('mpRemoveBtn').addEventListener('click', async () => {
+        if (!selectedProfileInModal) return;
+        if (selectedProfileInModal === 'Default') return alert("Cannot delete Default profile.");
+
+        if (confirm(`Delete profile "${selectedProfileInModal}"?`)) {
+            try {
+                await invoke('delete_profile', { profileName: selectedProfileInModal });
+
+                // Handle if active was deleted
+                if (appState.activeProfile === selectedProfileInModal) {
+                    appState.activeProfile = null;
+                    localStorage.removeItem('activeProfile');
+                    profileSelect.value = 'Default';
+                    updateApplyButtonVisibility();
+                }
+
+                selectedProfileInModal = 'Default';
+                await renderManagerList();
+                await refreshProfileList();
+            } catch (e) { alert("Error deleting: " + e); }
+        }
+    });
+
+    // 5. SELECT / APPLY
+    document.getElementById('mpSelectBtn').addEventListener('click', async () => {
+        if (!selectedProfileInModal) return;
+
+        closeManager();
+
+        // Set the main dropdown to what was selected here
+        profileSelect.value = selectedProfileInModal;
+        updateApplyButtonVisibility();
+
+        // Automatically trigger the Apply logic
+        document.getElementById('applyProfileBtn').click();
+    });
+
     function updateApplyButtonVisibility() {
         if (profileSelect.value !== appState.activeProfile) {
             applyProfileBtn.classList.remove('hidden');
