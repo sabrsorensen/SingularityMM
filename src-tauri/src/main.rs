@@ -1559,20 +1559,19 @@ fn create_empty_profile(profile_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn check_for_untracked_mods(tracked_mod_names: Vec<String>) -> bool {
-    // Returns TRUE if there are folders in GAMEDATA/MODS that are NOT in the tracked list
+fn check_for_untracked_mods() -> bool {
+    // Returns TRUE if there are folders in GAMEDATA/MODS that do NOT have a mod_info.json
+    // This implies they were put there manually and the manager doesn't know about them.
     if let Some(game_path) = find_game_path() {
-        let mods_path = game_path.join("GAMEDATA/MODS");
+        let mods_path = game_path.join("GAMEDATA").join("MODS");
         if let Ok(entries) = fs::read_dir(mods_path) {
             for entry in entries.flatten() {
                 if entry.path().is_dir() {
-                    if let Some(folder_name) = entry.file_name().to_str() {
-                        // We compare folder names. 
-                        // Note: This is a loose check because tracked_mod_names are usually zip filenames
-                        // A strict check would require reading mod_info.json, but this suffices for a warning.
-                        if !tracked_mod_names.iter().any(|n| n.contains(folder_name)) {
-                            return true; // Found an untracked folder
-                        }
+                    // Check if this folder contains mod_info.json
+                    let info_path = entry.path().join("mod_info.json");
+                    if !info_path.exists() {
+                        // Found a folder without info -> It is untracked
+                        return true; 
                     }
                 }
             }

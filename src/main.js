@@ -22,9 +22,6 @@ let isPanelOpen = false;
 const SCROLL_SPEED = 5;
 const CACHE_DURATION_MS = 60 * 60 * 1000;
 
-// A simple in-memory cache for changelogs for the current session.
-const changelogCache = new Map();
-
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- Application & UI State ---
@@ -324,13 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const installedData = getDetailedInstalledMods(); // Your existing helper
 
             // Check for untracked/manual mods
-            // We pass the list of KNOWN mod folder names (derived from download history)
-            // Note: downloadHistory has 'modFolderName'.
-            const knownFolders = downloadHistory
-                .filter(x => x.modFolderName)
-                .map(x => x.modFolderName);
-
-            const hasUntracked = await invoke('check_for_untracked_mods', { trackedModNames: knownFolders });
+            const hasUntracked = await invoke('check_for_untracked_mods');
 
             if (hasUntracked) {
                 // Show Warning
@@ -1498,27 +1489,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Fetches changelogs. Caches them for the session to avoid repeated calls.
-     */
-    async function fetchChangelogsFromNexus(modId) {
-        const modIdStr = String(modId);
-        if (changelogCache.has(modIdStr)) return changelogCache.get(modIdStr);
-
-        const url = `https://api.nexusmods.com/v1/games/nomanssky/mods/${modIdStr}/changelogs.json`;
-        const headers = { "apikey": NEXUS_API_KEY };
-        try {
-            const response = await fetch(url, { headers });
-            if (!response.ok) return null;
-            const data = await response.json();
-            changelogCache.set(modIdStr, data); // Cache the result
-            return data;
-        } catch (error) {
-            console.error(`Failed to fetch changelogs for mod ID ${modIdStr}:`, error);
-            return null;
-        }
-    }
-
     function displayChangelogs(modName, changelogs) {
         changelogModalTitle.textContent = `Changelogs: ${modName}`;
         changelogListContainer.innerHTML = '';
@@ -1794,10 +1764,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const changelogBtn = document.createElement('button');
         changelogBtn.className = 'detail-action-btn';
         changelogBtn.textContent = 'Changelogs';
-        changelogBtn.onclick = async () => {
-            changelogListContainer.innerHTML = '<p>Loading...</p>';
-            changelogModalOverlay.classList.remove('hidden');
-            const changelogs = await fetchChangelogsFromNexus(modData.mod_id);
+        changelogBtn.onclick = () => {
+            // NO API CALL. We use the data already loaded in modData.
+            // modData comes from curatedData, which now includes .changelogs
+            const changelogs = modData.changelogs || {};
             displayChangelogs(modData.name, changelogs);
         };
         modDetailSecondaryActions.appendChild(changelogBtn);
