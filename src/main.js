@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 nexusAccountStatus.textContent = `Connected as: ${userData.name}`;
                 nexusAccountStatus.classList.add('logged-in');
 
-                nexusAuthBtn.textContent = "Log Out";
+                nexusAuthBtn.textContent = "Disconnect";
                 nexusAuthBtn.className = "modal-btn-delete";
                 nexusAuthBtn.style.width = "100px";
                 nexusAuthBtn.style.padding = "5px";
@@ -359,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             nexusAccountStatus.textContent = "Not connected";
             nexusAccountStatus.classList.remove('logged-in');
 
-            nexusAuthBtn.textContent = "Log In";
+            nexusAuthBtn.textContent = "Connect";
             nexusAuthBtn.className = "modal-btn-confirm";
             nexusAuthBtn.style.width = "100px";
             nexusAuthBtn.style.padding = "5px";
@@ -3138,7 +3138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // LOGOUT
         if (isLoggedIn) {
-            const confirmed = await window.customConfirm("Are you sure you want to disconnect your Nexus Mods account?", "Log Out");
+            const confirmed = await window.customConfirm("Are you sure you want to disconnect your Nexus Mods account?", "Disconnect");
             if (confirmed) {
                 await invoke('logout_nexus');
                 await validateLoginState();
@@ -3155,7 +3155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const newKey = await invoke('login_to_nexus');
 
             if (newKey) {
-                await window.customAlert("Successfully logged in!", "Success");
+                await window.customAlert("Successfully connected!", "Success");
                 await validateLoginState();
             }
         } catch (error) {
