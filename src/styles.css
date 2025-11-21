@@ -133,19 +133,23 @@ header {
 .header-controls-right {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     -webkit-app-region: no-drag;
     position: absolute;
     top: 50%;
-    right: 20px;
+    right: 15px;
     transform: translateY(-50%);
     pointer-events: none;
 }
 
 .header-controls-right>img {
-    height: 28px;
+    height: 33px;
     cursor: pointer;
     transition: transform 0.2s ease-in-out, filter 0.2s;
+}
+
+#customCloseBtn {
+    height: 28px;
 }
 
 .header-controls-right>img:hover {
