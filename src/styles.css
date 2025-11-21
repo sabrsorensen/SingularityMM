@@ -115,7 +115,7 @@ header {
     position: relative;
     /* Establishes a positioning context for its children */
     width: 950px;
-    /* Matches your DEFAULT_WIDTH */
+    /* Matches DEFAULT_WIDTH */
     height: 100%;
     pointer-events: none;
 }
@@ -135,7 +135,6 @@ header {
     align-items: center;
     gap: 20px;
     -webkit-app-region: no-drag;
-    /* The container itself is not draggable */
     position: absolute;
     top: 50%;
     right: 20px;
@@ -159,15 +158,12 @@ header {
     pointer-events: auto;
 }
 
-/* --- ADD THESE NEW RULES FOR THE TEXT BUTTON --- */
+/* --- RULES FOR THE TEXT BUTTON --- */
 .header-button {
     display: flex;
-    /* Aligns the icon and text horizontally */
     align-items: center;
     gap: 8px;
-    /* Space between the icon and text */
     padding: 3px 4px;
-    /* Give it some nice padding */
     border-radius: 4px;
     border: 0px solid rgba(255, 255, 255, 0.1);
     cursor: pointer;
@@ -181,7 +177,6 @@ header {
 
 .header-button img {
     height: 20px;
-    /* Make the icon inside the button a bit smaller */
 }
 
 .header-button .button-text {
@@ -195,7 +190,6 @@ header {
     opacity: 1;
 }
 
-/* Rule to disable the button */
 .header-button.disabled {
     opacity: 0.4;
     cursor: not-allowed;
@@ -233,9 +227,7 @@ header {
     align-items: flex-start;
     gap: 30px;
     margin-left: -5px;
-    /* Counteract the parent's left padding */
     margin-right: -5px;
-    /* Counteract the parent's right padding */
     padding: 15px 15px 15px 0;
 }
 
@@ -248,9 +240,7 @@ header {
     flex-grow: 1;
     min-height: 0;
     margin-left: -5px;
-    /* Counteract the parent's left padding */
     margin-right: -5px;
-    /* Counteract the parent's right padding */
     margin-bottom: -5px;
     margin-top: 0px;
     padding: 10px 10px 0px 10px;
@@ -271,7 +261,6 @@ h3,
     position: relative;
     flex-grow: 1;
     height: 140px;
-    /* Match the height of .actions-column-right */
 }
 
 .settings-container {
@@ -329,22 +318,18 @@ h3,
 .actions-column-right {
     position: relative;
     flex-shrink: 0;
-    /* Give it a size so its children have a space to live in */
     width: 320px;
     height: 140px;
 }
 
-/* Clickable icon area. Its size IS the click area. */
 .action-diamond {
     position: absolute;
     cursor: pointer;
     width: 300px;
     height: 60px;
-    /* This centers the clickable box on the visual icon's center */
     transform: translate(-50%, -50%);
 }
 
-/* VISUAL icon layer. It is NOT clickable. */
 .action-diamond::before {
     content: '';
     position: absolute;
@@ -355,7 +340,6 @@ h3,
     background-position: center;
     transition: transform 0.2s, filter 0.2s;
     pointer-events: none;
-    /* This centers the large visual icon on top of the small clickable box */
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -366,23 +350,19 @@ h3,
     filter: brightness(1.2);
 }
 
-/* Shared styles for main and sub labels */
 .diamond-label,
 .diamond-sublabel {
     position: absolute;
     margin: 0;
     white-space: nowrap;
-    /* This makes the labels unclickable, passing clicks to the diamond below */
     pointer-events: none;
 }
 
-/* The shared main text styles */
 .diamond-label {
     font-family: var(--font-primary);
     font-size: 13.5pt;
 }
 
-/* The shared sub-text styles */
 .diamond-sublabel {
     font-size: 10.5pt;
     opacity: 0.7;
@@ -556,7 +536,6 @@ h3,
     align-items: center;
     /* Vertically centers them */
     min-width: 0;
-    /* Important for preventing text overflow issues */
 }
 
 .header-row .mod-name {
@@ -566,7 +545,6 @@ h3,
 
 /* This is just for the text itself */
 .mod-name-text {
-    /* Truncate long mod names with an ellipsis */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -637,7 +615,6 @@ h3,
 
 /* This class hides the original element in the list while its ghost is being dragged */
 .mod-row.is-dragging {
-    /* Don't remove it from the layout, just make it invisible and take up zero space. */
     visibility: hidden !important;
     height: 0 !important;
     padding-top: 0 !important;
@@ -651,12 +628,10 @@ h3,
 /* --- THEMED CHECKBOX --- */
 
 /* 1. The Label: This is now just an invisible anchor for positioning. */
-/* Its size dictates the space it takes up in the layout. */
 label.switch {
     display: inline-block;
     position: relative;
     width: 24px;
-    /* A small footprint that fits the row. */
     height: 24px;
     cursor: pointer;
     vertical-align: middle;
@@ -664,21 +639,14 @@ label.switch {
 }
 
 /* 2. The Pseudo-element: This is the large, VISUAL part the user sees. */
-/* It is taken OUT of the layout flow, so its size doesn't affect the row. */
 label.switch::before {
     content: '';
     position: absolute;
-
-    /* Center it on top of the small anchor label. */
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-
-    /* This is the VISUAL size. */
     width: 50px;
     height: 50px;
-
-    /* All visual styles are applied ONLY to the pseudo-element. */
     background-image: url('/src/assets/checkbox-off.png');
     background-position: center;
     background-repeat: no-repeat;
@@ -733,7 +701,7 @@ label.switch:has(input:checked)::before {
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-/* Style the placeholder text (e.g., "Search mods...") */
+/* Style the placeholder text */
 #searchModsInput::placeholder {
     color: var(--c-text-primary);
     opacity: 0.6;
@@ -760,13 +728,8 @@ label.switch:has(input:checked)::before {
     height: 8px;
     background-color: var(--c-accent-secondary);
     border-radius: 50%;
-    /* Makes it a circle */
     margin-left: 10px;
-
-    /* A subtle glow to make it stand out */
     box-shadow: 0 0 6px 1px var(--c-accent-secondary);
-
-    /* A gentle pulsing animation to draw the eye */
     animation: pulse-gold 2s infinite;
 }
 
@@ -793,7 +756,7 @@ label.switch:has(input:checked)::before {
     display: none;
 }
 
-/* --- NEW INLINE MOD INFO PANEL --- */
+/* --- INLINE MOD INFO PANEL --- */
 .mod-info-panel-inline {
     background-image: url('/src/assets/modinfopanel.png');
     background-size: 100% 100%;
@@ -838,13 +801,10 @@ label.switch:has(input:checked)::before {
     padding-bottom: 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     text-shadow: 0 0 6px var(--c-accent-primary-glow);
-    /* text-shadow: var(--glow-layer-2), var(--glow-layer-3); */
 }
 
-/* --- ADD THIS NEW RULE FOR THE BUTTON --- */
 .nexus-button {
     height: 24px;
-    /* Adjust size as needed */
     width: 24px;
     opacity: 0.7;
     transition: all 0.2s;
@@ -864,7 +824,6 @@ label.switch:has(input:checked)::before {
     width: 100%;
 }
 
-/* --- NEW Two-Column Body Layout --- */
 .info-body {
     display: flex;
     margin-top: 12px;
@@ -877,7 +836,6 @@ label.switch:has(input:checked)::before {
     gap: 8px;
     flex-shrink: 0;
     width: 200px;
-    /* Give it a fixed width */
 }
 
 .info-line {
@@ -909,18 +867,14 @@ label.switch:has(input:checked)::before {
     flex-shrink: 0;
 }
 
-/* --- Column 2: Description --- */
 .info-description-column {
     flex-grow: 1;
-    /* Allow description to take up remaining space */
     min-width: 0;
-    /* Important for flexbox text wrapping */
 }
 
 .info-description-column .info-label {
     margin-bottom: 6px;
     display: block;
-    /* Make the "Description" label a block */
 }
 
 .info-description {
@@ -928,7 +882,6 @@ label.switch:has(input:checked)::before {
     font-size: 11pt;
     opacity: 0.8;
     line-height: 1.4;
-    /* Allow long descriptions to wrap */
     word-wrap: break-word;
 }
 
@@ -953,21 +906,15 @@ label.switch:has(input:checked)::before {
     background-color: #888888;
 }
 
-/* New styles for the image-based drop zone */
 .drop-zone {
     background-image: url('/src/assets/dropzone.png');
     background-size: 100% 100%;
-    /* Stretch the image to fill the div */
     background-position: center;
     background-repeat: no-repeat;
-
-    /* --- Remove the old visual styles --- */
     border: none;
     background-color: transparent;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-
-    /* --- These lines center the text on top of the image --- */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -975,7 +922,6 @@ label.switch:has(input:checked)::before {
     margin-top: 0px;
     height: 100%;
     width: 100%;
-    /* height */
     color: #EAEAEA;
     font-size: 12pt;
     font-weight: bold;
@@ -1005,7 +951,6 @@ label.switch:has(input:checked)::before {
 
 .modal-overlay.higher {
     z-index: 3000;
-    /* A higher value ensures it's on top */
 }
 
 .modal-content {
@@ -1032,7 +977,6 @@ label.switch:has(input:checked)::before {
 /* --- UPDATE MODAL STYLES --- */
 .update-modal {
     max-width: 600px;
-    /* A wider modal for the list */
     text-align: left;
     font-family: var(--font-primary);
 }
@@ -1041,9 +985,7 @@ label.switch:has(input:checked)::before {
     margin-top: 20px;
     margin-bottom: 20px;
     max-height: 400px;
-    /* Limit the height and allow scrolling */
     overflow-y: auto;
-    /* Add some padding on the right to make space for the scrollbar */
     padding-right: 10px;
 }
 
@@ -1079,7 +1021,6 @@ label.switch:has(input:checked)::before {
 
 .update-item-version .latest {
     color: #FFD700;
-    /* Gold color for the new version */
     font-weight: bold;
 }
 
@@ -1148,18 +1089,13 @@ label.switch:has(input:checked)::before {
 }
 
 .download-item .download-item-name {
-    /* These three properties work together to create the ellipsis effect */
     white-space: nowrap;
-    /* Prevent the text from wrapping to a new line */
     overflow: hidden;
-    /* Hide any text that overflows the container */
     text-overflow: ellipsis;
-    /* Display '...' for the hidden text */
 }
 
 .download-modal {
     max-width: 800px;
-    /* A nice wide modal */
     text-align: left;
     font-family: var(--font-primary);
 }
@@ -1167,11 +1103,9 @@ label.switch:has(input:checked)::before {
 .download-list-container {
     margin-bottom: 20px;
     max-height: 400px;
-    /* Limit height and allow scrolling */
     overflow-y: auto;
     display: flex;
     flex-direction: column-reverse;
-    /* This makes new items appear at the top! */
 }
 
 .download-item {
@@ -1198,7 +1132,6 @@ label.switch:has(input:checked)::before {
 /* Status-specific coloring */
 .download-item-status.status-progress {
     color: #e0e0e0;
-    /* Neutral/in-progress color */
 }
 
 .download-item-status.status-success {
@@ -1216,28 +1149,18 @@ label.switch:has(input:checked)::before {
     font-weight: bold;
 }
 
-/* Add this new rule for the 'removed' status */
-.download-item-status.status-removed {
-    color: #9E9E9E;
-    /* A neutral grey color */
-    font-style: italic;
-}
-
 /* --- SETTINGS MODAL STYLES --- */
 .settings-modal {
-    /* Set the default font for all text inside the modal */
     font-family: var(--font-secondary);
 }
 
 .settings-modal h2,
 .settings-modal h3 {
-    /* Apply the primary font to both the main title and the section title */
     font-family: var(--font-primary);
 }
 
 .settings-modal button,
 .settings-modal select {
-    /* Explicitly set the font for buttons and select dropdowns */
     font-family: var(--font-secondary);
 }
 
@@ -1255,13 +1178,8 @@ label.switch:has(input:checked)::before {
 }
 
 .settings-modal>.setting-row>label {
-    /* Give all labels a fixed minimum width */
     min-width: 100px;
-
-    /* Ensure text is aligned to the left */
     text-align: left;
-
-    /* Use flex-grow: 0 to prevent the label from expanding */
     flex-grow: 0;
 }
 
@@ -1280,7 +1198,6 @@ label.switch:has(input:checked)::before {
     font-size: 14px;
     color: var(--c-text-primary);
     width: 40px;
-    /* Give it a fixed width to prevent layout shifts */
     text-align: right;
 }
 
@@ -1305,8 +1222,6 @@ label.switch:has(input:checked)::before {
    ========================================================================== */
 .context-menu {
     background-color: rgba(35, 35, 35, 0.95);
-    /* backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px); */
     border-radius: 6px;
     filter: drop-shadow(1px 1px 7px black);
     min-width: 150px;
@@ -1343,17 +1258,13 @@ button.context-menu-item.delete:hover {
     background-color: var(--c-danger-hover);
 }
 
-/* === FIX FOR NEW VIEW LAYOUT === */
+/* === VIEW LAYOUT === */
 #myModsView,
 #browseView {
     display: flex;
-    /* Makes it a flex container */
     flex-direction: column;
-    /* Stacks its children (panels, grids) vertically */
     flex-grow: 1;
-    /* Makes the active view expand to fill all available space */
     min-height: 0;
-    /* A crucial flexbox fix that allows child elements to scroll correctly */
 }
 
 /* === UNIFIED STYLED DROPDOWN === */
@@ -1361,11 +1272,7 @@ button.context-menu-item.delete:hover {
     appearance: none;
     -webkit-appearance: none;
     min-width: 170px;
-
     padding-right: 30px;
-    /* Add space for the custom arrow */
-
-    /* Custom Arrow SVG */
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23EAEAEA' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
     background-repeat: no-repeat;
     background-position: right 8px center;
@@ -1376,7 +1283,6 @@ button.context-menu-item.delete:hover {
     border-color: var(--c-accent-primary);
 }
 
-/* Style for the dropdown options list */
 .styled-select option {
     background-color: #1D1D1D;
     color: var(--c-text-primary);
@@ -1384,16 +1290,11 @@ button.context-menu-item.delete:hover {
 
 /* --- Main Navigation (Tabs) --- */
 .main-nav {
-    /* These properties make the nav clickable in a draggable region */
     -webkit-app-region: no-drag;
-
-    /* These properties center the element in the header */
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-
-    /* These are your existing properties, just without the old margin */
     display: flex;
     justify-content: center;
 }
@@ -1473,9 +1374,7 @@ button.context-menu-item.delete:hover {
     gap: var(--browse-grid-gap, 10px);
     overflow-y: auto;
     flex-grow: 1;
-    /* This is the fix: tells the grid to take up all available space */
     min-height: 0;
-    /* A crucial flexbox fix that enables proper scrolling */
     padding-right: 10px;
     padding-top: 5px;
 }
@@ -1488,11 +1387,9 @@ button.context-menu-item.delete:hover {
     overflow: hidden;
     display: flex;
     flex-direction: row;
-    /* Lay out image and body horizontally */
     border: 1px solid transparent;
     transition: all 0.2s ease-in-out;
     flex-shrink: 0;
-    /* Prevent cards from shrinking */
 }
 
 .mod-card.selected {
@@ -1527,7 +1424,6 @@ button.context-menu-item.delete:hover {
     top: 2px;
     left: 2px;
     width: 20px;
-    /* A good size for the corner */
     height: 20px;
     filter: brightness(0) invert(1) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
 }
@@ -1539,7 +1435,6 @@ button.context-menu-item.delete:hover {
 
 .mod-card-summary.warning-text {
     color: #FFD700;
-    /* Gold/yellow color */
     font-weight: bold;
     opacity: 0.9;
 }
@@ -1552,28 +1447,21 @@ button.context-menu-item.delete:hover {
     font-size: 11pt;
     opacity: 0.6;
     margin-left: 8px;
-    /* Space between title and version */
     font-family: var(--font-secondary);
-    /* Use the standard text font */
 }
 
-/* --- ADD THIS NEW RULE --- */
 .mod-card.has-warning .mod-card-title {
     color: var(--c-accent-secondary);
 }
 
 .mod-card-title .warning-icon {
     cursor: help;
-    /* Changes the cursor to a question mark to indicate a tooltip */
 }
 
 .mod-card-thumbnail {
     width: 106px;
-    /* Set width equal to height */
     height: 106px;
-    /* This creates the square */
     object-fit: cover;
-    /* This crops and centers the image */
     background-color: #222;
     flex-shrink: 0;
 }
@@ -1584,7 +1472,6 @@ button.context-menu-item.delete:hover {
     flex-direction: column;
     flex-grow: 1;
     gap: 5px;
-    /* Reduced from 10px to tighten the layout */
     min-width: 0;
 }
 
@@ -1609,18 +1496,15 @@ button.context-menu-item.delete:hover {
 .mod-card-stats {
     display: flex;
     gap: 20px;
-    /* This adds a nice space between the two stats */
     font-size: 10pt;
     opacity: 0.8;
     margin-top: auto;
-    /* This keeps the stats at the bottom of the card */
 }
 
 .mod-card-stats span {
     display: flex;
     align-items: center;
     gap: 5px;
-    /* By removing 'flex-basis', the spans will now only be as wide as their content */
 }
 
 .mod-card-stats img {
@@ -1642,8 +1526,6 @@ button.context-menu-item.delete:hover {
     opacity: 0.6;
     margin: 0;
     line-height: 1.4;
-
-    /* NEW single-line truncation logic */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1656,7 +1538,6 @@ button.context-menu-item.delete:hover {
     border: none;
     border-radius: 4px;
     padding: 8px;
-    /* Remove margin as the parent's `gap` will handle it */
     margin-top: 0;
     cursor: pointer;
     transition: all 0.2s;
@@ -1677,13 +1558,12 @@ button.context-menu-item.delete:hover {
    6. Mod Detail Panel
    ========================================================================== */
 
-/* --- NEW Styling for Mod Detail Meta Section --- */
+/* --- Styling for Mod Detail Meta Section --- */
 .mod-detail-meta {
     margin-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* Space between each line of info */
     font-size: 11pt;
 }
 
@@ -1730,17 +1610,14 @@ button.context-menu-item.delete:hover {
     flex-direction: column;
     flex-grow: 1;
     min-width: 0;
-    /* Prevents content from overflowing */
 }
 
 .mod-detail-content-wrapper {
     width: 700px;
-    /* This is the fixed width of your panel content */
     height: 100%;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    /* Prevent this wrapper from shrinking */
 }
 
 .mod-detail-panel {
@@ -1749,11 +1626,8 @@ button.context-menu-item.delete:hover {
     flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
-
-    /* THE FIX: Use a transition-delay on visibility */
     width: 0;
     visibility: hidden;
-    /* Start completely invisible */
     transform: translateX(100%);
 }
 
@@ -1762,7 +1636,6 @@ button.context-menu-item.delete:hover {
     visibility: visible;
     transform: translateX(0%);
     transition: transform 0.25s ease-out;
-    /* ONLY animate when the 'open' class is added */
 }
 
 .mod-detail-header {
@@ -1780,7 +1653,6 @@ button.context-menu-item.delete:hover {
     font-size: 18pt;
     color: var(--c-text-primary);
     text-shadow: 0 0 6px var(--c-accent-primary-glow);
-    /* text-shadow: var(--glow-layer-2), var(--glow-layer-3); */
 }
 
 .mod-detail-header img {
@@ -1807,16 +1679,13 @@ button.context-menu-item.delete:hover {
     flex-basis: 150px;
     flex-shrink: 0;
     display: flex;
-    /* Use flexbox for vertical layout */
     flex-direction: column;
 }
 
 .mod-detail-image {
     width: 100%;
     aspect-ratio: 1 / 1;
-    /* This forces the element to be a perfect square */
     object-fit: cover;
-    /* This crops and centers the image within the square */
     border-radius: 4px;
     background-color: #222;
 }
@@ -1852,7 +1721,6 @@ button.context-menu-item.delete:hover {
     opacity: 0.9;
     overflow-wrap: break-word;
     font-family: var(--font-secondary);
-    /* <-- FIX: Use Roboto for all description text */
 }
 
 .mod-detail-description>* {
@@ -1862,13 +1730,11 @@ button.context-menu-item.delete:hover {
 
 .mod-detail-description>*+* {
     margin-top: 2em;
-    /* Use 'em' for spacing relative to the font size */
 }
 
 .mod-detail-description br {
     margin: 0;
     display: block;
-    /* Required to apply margin, but we set it to 0 */
     content: "";
 }
 
@@ -1876,15 +1742,13 @@ button.context-menu-item.delete:hover {
     margin-top: 20px;
 }
 
-/* --- NEW Styling for Mod Detail Footer --- */
+/* --- Styling for Mod Detail Footer --- */
 .mod-detail-footer {
     padding: 15px;
     margin-top: auto;
-    /* This pushes the footer to the bottom */
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Re-use and adapt your existing modal button style */
 .mod-detail-footer .modal-btn-cancel {
     background-color: transparent;
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1900,12 +1764,11 @@ button.context-menu-item.delete:hover {
     border-color: var(--c-accent-primary);
 }
 
-/* --- NEW Styling for Injected Description Content --- */
+/* --- Styling for Injected Description Content --- */
 .mod-detail-description h1,
 .mod-detail-description h2,
 .mod-detail-description h3 {
     font-family: var(--font-primary);
-    /* Headings can still use the display font */
     color: var(--c-accent-primary);
     font-size: 14pt;
 }
@@ -1914,7 +1777,6 @@ button.context-menu-item.delete:hover {
 .mod-detail-description b {
     color: var(--c-accent-primary);
     font-weight: 700;
-    /* Use a heavier font-weight for Roboto */
 }
 
 .mod-detail-description ul,
@@ -1924,7 +1786,6 @@ button.context-menu-item.delete:hover {
 
 .mod-detail-description li {
     margin-bottom: 0.5em;
-    /* Reduce space between list items */
 }
 
 .mod-detail-description li:last-child {
@@ -1958,37 +1819,31 @@ button.context-menu-item.delete:hover {
     font-size: 0.9em;
 }
 
-/* THIS IS THE FIX: Remove the background and padding from <code>
-   tags when they ARE inside a <pre> block. */
+/* Remove the background and padding from <code> tags when they ARE inside a <pre> block. */
 .mod-detail-description pre code {
     background-color: transparent;
     padding: 0;
 }
 
-/* --- NEW Styling for Links --- */
+/* --- Styling for Links --- */
 .mod-detail-description a {
     color: var(--c-accent-primary);
-    /* Use your theme's accent color for links */
     text-decoration: none;
-    /* Remove the underline */
 }
 
 .mod-detail-description a:hover {
     text-decoration: underline;
-    /* Add the underline back on hover for good UX */
 }
 
-/* --- NEW Styling for Alignment and Images --- */
+/* --- Styling for Alignment and Images --- */
 .mod-detail-description .bbcode-center {
     text-align: center;
 }
 
 .mod-detail-description .bbcode-img {
     max-width: 100%;
-    /* Ensure images don't overflow the panel */
     border-radius: 4px;
     margin: 10px 0;
-    /* Add some vertical space around images */
 }
 
 /* ==========================================================================
@@ -2002,7 +1857,6 @@ button.context-menu-item.delete:hover {
 
 .file-selection-modal .update-list-container {
     padding-right: 0;
-    /* Remove padding now that we have sections */
 }
 
 /* Style for the standout "Main File" */
@@ -2014,7 +1868,6 @@ button.context-menu-item.delete:hover {
 
 .primary-file-container .update-item-name {
     font-size: 14pt;
-    /* Make the main file name larger */
 }
 
 /* Styles for the collapsible sections */
@@ -2058,7 +1911,6 @@ button.context-menu-item.delete:hover {
 
 .collapsible-content.open {
     max-height: 1000px;
-    /* A large value to allow it to expand fully */
 }
 
 .collapsible-section {
@@ -2075,7 +1927,6 @@ button.context-menu-item.delete:hover {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    /* Space between the buttons */
 }
 
 /* A new generic style for the Changelog and Nexus buttons */
@@ -2090,11 +1941,8 @@ button.context-menu-item.delete:hover {
     cursor: pointer;
     transition: all 0.2s;
     text-align: center;
-    /* Center text for both button and <a> tags */
     display: block;
-    /* Make the <a> tag behave like a button */
     text-decoration: none;
-    /* Remove underline from <a> tag */
     font-size: 10pt;
 }
 
@@ -2147,8 +1995,6 @@ button.context-menu-item.delete:hover {
     flex-direction: column;
     gap: 10px;
     margin-top: 10px;
-    /* Replaces 'auto' with a fixed margin for spacing */
-    /* padding-top is no longer needed */
 }
 
 /* --- Styling for Priority Modal --- */
@@ -2170,16 +2016,13 @@ button.context-menu-item.delete:hover {
 
 #priorityModalTitle {
     overflow-wrap: break-word;
-    /* Allows long words to break and wrap */
 }
 
 /* --- Styling for NXM Handler Status Message --- */
 .handler-status {
     margin-top: 15px;
-    /* Add some space above the message */
     font-weight: bold;
     min-height: 1.2em;
-    /* Prevent layout shift when text appears */
     transition: color 0.3s;
 }
 
@@ -2204,7 +2047,6 @@ button.context-menu-item.delete:hover {
     flex-direction: row;
     height: 130px;
     flex-shrink: 0;
-    /* Fixed height for the footer area */
     margin-top: 0px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: 0px;
@@ -2236,7 +2078,6 @@ button.context-menu-item.delete:hover {
     margin-right: -10px;
 }
 
-/* --- Adjusting the Existing Drop Zone --- */
 /* --- Launch Button Styling --- */
 .launch-button {
     display: flex;
@@ -2284,7 +2125,6 @@ button.context-menu-item.delete:hover {
     width: 40px;
     height: 40px;
     background-color: #FFD700;
-    /* Default Gold Glow */
     border-radius: 50%;
     filter: blur(15px);
     z-index: 1;
@@ -2328,9 +2168,7 @@ button.context-menu-item.delete:hover {
 
     50% {
         transform: translate(-50%, -50%) scale(1.5);
-        /* Grow larger */
         opacity: 0.9;
-        /* Get brighter */
     }
 
     100% {
@@ -2357,7 +2195,6 @@ button.context-menu-item.delete:hover {
 .launch-button.is-launching .launch-text {
     opacity: 1;
     color: var(--c-accent-secondary);
-    /* Change text color to indicate activity */
     font-weight: bold;
     letter-spacing: 1px;
 }
@@ -2396,33 +2233,21 @@ button.context-menu-item.delete:hover {
 .apply-btn {
     width: 30px;
     height: 30px;
-
-    /* Transparent background */
     background-color: transparent;
     border: none;
-
-    /* The Icon */
     background-image: url('/src/assets/icon-installed.png');
     background-size: 20px 20px;
-    /* Adjust size of the checkmark inside the button */
     background-position: center;
     background-repeat: no-repeat;
-
     cursor: pointer;
-
-    /* Initial State: Greenish glow to indicate "Go" */
     filter: drop-shadow(0 0 2px var(--c-status-success));
-
-    /* The Pulse Animation */
     animation: icon-pulse 2s infinite ease-in-out;
     transition: filter 0.2s;
 }
 
 .apply-btn:hover {
-    /* Make it glow brighter on hover */
     filter: drop-shadow(0 0 5px #fff) brightness(1.2);
     animation: none;
-    /* Optional: Stop pulsing on hover so it feels solid */
     transform: scale(1.1);
 }
 
@@ -2434,9 +2259,7 @@ button.context-menu-item.delete:hover {
 
     50% {
         transform: scale(1.15);
-        /* Grow slightly */
         filter: drop-shadow(0 0 8px var(--c-status-success));
-        /* Glow stronger */
     }
 
     100% {
@@ -2445,11 +2268,6 @@ button.context-menu-item.delete:hover {
     }
 }
 
-/* Special layout for the mockup look:
-   Row 1: Add, Rename, Delete
-   Row 2: Import, Export (centered or spanned?)
-   Let's make Import/Export share the row 50/50
-*/
 .profile-actions-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -2463,7 +2281,6 @@ button.context-menu-item.delete:hover {
     grid-column: auto !important;
     grid-area: auto !important;
     width: auto !important;
-    /* Stop them from being 100% width */
 }
 
 .profile-btn {
@@ -2496,8 +2313,6 @@ button.context-menu-item.delete:hover {
 #openProfileManagerBtn {
     /* Make it span all 3 columns */
     grid-column: 1 / -1 !important;
-
-    /* Style it distinctively */
     background-color: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--c-border);
     color: var(--c-text-primary);
@@ -2590,7 +2405,6 @@ button.context-menu-item.delete:hover {
     width: 600px;
     max-width: 95%;
     padding: 0;
-    /* Reset default padding */
     display: flex;
     flex-direction: column;
     background-color: var(--c-bg-modal);
@@ -2614,7 +2428,6 @@ button.context-menu-item.delete:hover {
     padding: 15px;
     gap: 15px;
     height: 300px;
-    /* Fixed height for list */
 }
 
 .mp-list-container {
@@ -2645,7 +2458,6 @@ button.context-menu-item.delete:hover {
 
 .mp-list-item.active {
     background-color: var(--c-accent-primary);
-    /* Purple/Pink */
     color: #fff;
 }
 
@@ -2749,5 +2561,25 @@ button.context-menu-item.delete:hover {
 .modal-gen-btn-confirm:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: var(--c-accent-primary);
+    font-weight: bold;
+}
+
+/* --- Settings Modal: Account Row --- */
+.account-row-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.account-status-text {
+    font-size: 14px;
+    color: var(--c-text-primary);
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.account-status-text.logged-in {
+    color: var(--c-accent-primary);
+    font-style: normal;
     font-weight: bold;
 }

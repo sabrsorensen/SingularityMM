@@ -25,6 +25,10 @@ use std::process::Command;
 use std::io::{self, Read};
 use sha2::{Sha256, Digest};
 use hex;
+use uuid::Uuid;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use futures_util::{StreamExt, SinkExt};
+use url::Url;
 
 // --- STRUCTS ---
 
@@ -123,22 +127,21 @@ struct ModRenderData {
 #[derive(Serialize, Clone)]
 struct DownloadResult {
     path: String,
-    size: u64, // File size in bytes
-    created_at: u64, // Unix timestamp in seconds
+    size: u64,
+    created_at: u64,
 }
 
 #[derive(Serialize, Clone)]
 struct GamePaths {
-    game_root_path: String,   // Path to the folder containing GAMEDATA
-    settings_root_path: String, // Path to the folder containing GCMODSETTINGS.MXML
-    version_type: String,     // "Steam", "GOG", or "GamePass"
+    game_root_path: String,
+    settings_root_path: String,
+    version_type: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct ProfileModEntry {
     filename: String,
     hash: String,
-    // New fields for metadata
     mod_id: Option<String>,
     file_id: Option<String>,
     version: Option<String>,
@@ -155,8 +158,7 @@ struct ProfileSaveRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct ModProfileData {
     name: String,
-    // We store the filename of the zip archive in the downloads folder
-    mods: Vec<ProfileModEntry>, // Changed from Vec<String> 
+    mods: Vec<ProfileModEntry>,
 }
 
 #[derive(Serialize, Clone)]
@@ -177,7 +179,7 @@ const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 fn calculate_file_hash(path: &Path) -> Result<String, String> {
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0; 4096]; // Read in chunks
+    let mut buffer = [0; 4096];
 
     loop {
         let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
@@ -263,21 +265,10 @@ fn find_steam_path() -> Option<PathBuf> {
 }
 
 fn find_gamepass_path() -> Option<PathBuf> {
-    // Game Pass games, after "Enable Mods" is used, are moved to a user-accessible
-    // location, typically C:\XboxGames.
-    // The core game content, including GAMEDATA and Binaries, is inside a 'Content' subfolder.
-    
-    // First, we check the most common default path for an instant result.
     let default_path = PathBuf::from("C:\\XboxGames\\No Man's Sky\\Content");
-
-    // We verify that this looks like a valid NMS installation by checking for
-    // the presence of the Binaries folder.
     if default_path.join("Binaries").is_dir() {
         return Some(default_path);
     }
-    
-    // If the default path fails, we use PowerShell to query Windows for the UWP package location.
-    // This can find installations on other drives (e.g., D:\XboxGames).
     let output = match Command::new("powershell")
         .args([
             "-NoProfile",
@@ -287,13 +278,12 @@ fn find_gamepass_path() -> Option<PathBuf> {
         .output()
         {
             Ok(output) => output,
-            Err(_) => return None, // PowerShell might not be available or could fail
+            Err(_) => return None,
         };
 
     if output.status.success() {
         let path_str = String::from_utf8(output.stdout).unwrap_or_default().trim().to_string();
         if !path_str.is_empty() {
-            // The moddable content is always in a 'Content' subdirectory of the package's install location.
             let game_path = PathBuf::from(path_str).join("Content");
             if game_path.join("Binaries").is_dir() {
                 return Some(game_path);
@@ -451,7 +441,7 @@ fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnal
     }
 
     // 1. CHECK: Is this file already in the downloads folder?
-    // We compare canonical paths to be sure.
+    // Compare canonical paths to be sure.
     let in_downloads = if let (Ok(p1), Ok(p2)) = (archive_path.canonicalize(), downloads_dir.canonicalize()) {
         p1.starts_with(p2)
     } else {
@@ -463,10 +453,9 @@ fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnal
         let file_name = archive_path.file_name().ok_or("Invalid filename")?;
         let target_path = downloads_dir.join(file_name);
         
-        // If it exists, we might be overwriting an old manual drop, which is fine.
+        // If it exists, it might be overwriting an old manual drop, which is fine.
         fs::copy(&archive_path, &target_path).map_err(|e| format!("Failed to copy to downloads: {}", e))?;
         
-        // Update the archive_path variable to point to our internal copy
         archive_path = target_path;
     }
     let game_path = find_game_path().ok_or_else(|| "Could not find the game installation path.".to_string())?;
@@ -496,11 +485,9 @@ fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnal
         .collect();
 
     if folder_entries.is_empty() {
-        // Even if empty, we need to clean up. The previous RAII guard did this automatically.
-        // We will spawn a thread here as well for consistency.
         let path_for_cleanup = temp_extract_path.clone();
         thread::spawn(move || {
-            thread::sleep(Duration::from_secs(2)); // Give it a moment
+            thread::sleep(Duration::from_secs(2));
             if fs::remove_dir_all(&path_for_cleanup).is_ok() {
                 println!("Cleaned up empty temp dir: {}", path_for_cleanup.display());
             }
@@ -570,10 +557,8 @@ fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnal
         }
     }
 
-    // --- THIS IS THE NEW, DETACHED CLEANUP LOGIC ---
     let path_for_cleanup = temp_extract_path.clone();
     thread::spawn(move || { thread::sleep(Duration::from_secs(3)); fs::remove_dir_all(&path_for_cleanup).ok(); });
-    // --- END OF NEW LOGIC ---
 
     Ok(InstallationAnalysis {
         successes,
@@ -646,7 +631,6 @@ fn detect_game_installation() -> Option<GamePaths> {
 
     // --- Try Steam ---
     if let Some(path) = find_steam_path() {
-        // For Steam, game root and settings root are the same.
         let settings_dir = path.join("Binaries\\SETTINGS");
         if settings_dir.exists() {
             return Some(GamePaths {
@@ -659,7 +643,6 @@ fn detect_game_installation() -> Option<GamePaths> {
 
     // --- Try GOG ---
     if let Some(path) = find_gog_path() {
-        // For GOG, game root and settings root are the same.
         let settings_dir = path.join("Binaries\\SETTINGS");
         if settings_dir.exists() {
             return Some(GamePaths {
@@ -671,10 +654,7 @@ fn detect_game_installation() -> Option<GamePaths> {
     }
     
     // --- Try Game Pass ---
-    // (We include the find_gamepass_path function from the previous step here)
     if let Some(path) = find_gamepass_path() {
-        // As you correctly stated, the structure is the same.
-        // The path returned is the "Content" folder.
         let settings_dir = path.join("Binaries\\SETTINGS");
         if settings_dir.exists() {
             return Some(GamePaths {
@@ -954,7 +934,6 @@ fn reorder_mods(ordered_mod_names: Vec<String>) -> Result<String, String> {
     let xml_body = String::from_utf8(buf)
         .map_err(|e| format!("Failed to convert formatted XML to string: {}", e))?;
 
-    // --- THIS IS THE FIX ---
     let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
         .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
         .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
@@ -1021,7 +1000,6 @@ fn update_mod_name_in_xml(old_name: String, new_name: String) -> Result<String, 
     let xml_body = String::from_utf8(buf)
         .map_err(|e| format!("Failed to convert formatted XML to string: {}", e))?;
     
-    // --- THIS IS THE FIX ---
     let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
         .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
         .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
@@ -1142,17 +1120,21 @@ async fn download_and_install_mod(
 
 #[tauri::command]
 fn get_nexus_api_key() -> Result<String, String> {
-    dotenvy::dotenv().ok();
-    match env::var("NEXUS_API_KEY") {
-        Ok(key) => {
-            println!("Successfully loaded NEXUS_API_KEY.");
-            Ok(key)
-        }
-        Err(_) => {
-            eprintln!("ERROR: NEXUS_API_KEY not found in .env file or environment.");
-            Err("NEXUS_API_KEY not found in .env file".to_string())
+    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
+    let auth_path = exe_dir.join("auth.json");
+
+    if auth_path.exists() {
+        let content = fs::read_to_string(auth_path).map_err(|e| e.to_string())?;
+        let json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        
+        if let Some(key) = json.get("apikey").and_then(|k| k.as_str()) {
+            println!("Loaded API Key from auth.json");
+            return Ok(key.to_string());
         }
     }
+
+    Err("No API Key found. Please log in.".to_string())
 }
 
 #[tauri::command]
@@ -1171,7 +1153,6 @@ fn check_mod_exists(mod_folder_name: String) -> bool {
 fn unregister_nxm_protocol() -> Result<(), String> {
     #[cfg(windows)]
     {
-        // THIS IS THE FIX: We target HKEY_CURRENT_USER for deletion
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         hkcu.delete_subkey_all("Software\\Classes\\nxm").map_err(|e| e.to_string())?;
         println!("Successfully unregistered nxm:// protocol handler from current user.");
@@ -1205,7 +1186,6 @@ fn register_nxm_protocol() -> Result<(), String> {
         let exe_path_str = exe_path.to_string_lossy();
         let command = format!("\"{}\" \"%1\"", exe_path_str);
 
-        // THIS IS THE FIX: We now start from HKEY_CURRENT_USER
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let (nxm_key, _) = hkcu.create_subkey("Software\\Classes\\nxm").map_err(|e| e.to_string())?;
 
@@ -1247,7 +1227,7 @@ async fn download_mod_archive(download_url: String, file_name: String) -> Result
     fs::write(&final_archive_path, &file_bytes)
         .map_err(|e| format!("Failed to write archive to downloads folder: {}", e))?;
     
-    // --- NEW LOGIC: Get file metadata ---
+    // --- Get file metadata ---
     let metadata = fs::metadata(&final_archive_path).map_err(|e| e.to_string())?;
     let file_size = metadata.len();
     let created_time = metadata.created().map_err(|e| e.to_string())?
@@ -1268,7 +1248,7 @@ fn show_in_folder(path: String) {
     {
         use std::process::Command;
         Command::new("explorer")
-            .args(["/select,", &path]) // The "/select," part is important
+            .args(["/select,", &path])
             .spawn()
             .unwrap();
     }
@@ -1294,7 +1274,6 @@ fn clear_downloads_folder() -> Result<(), String> {
         for entry in entries {
             if let Ok(entry) = entry {
                 let path = entry.path();
-                // We only want to delete files, not subdirectories (as a safety measure)
                 if path.is_file() {
                     fs::remove_file(path).map_err(|e| e.to_string())?;
                 }
@@ -1312,7 +1291,7 @@ fn launch_game(version_type: String, game_path: String) -> Result<(), String> {
             open::that("steam://run/275850").map_err(|e| e.to_string())?;
         }
         "GOG" | "GamePass" | _ => {
-            // For GOG and GamePass (if accessible), we try to launch the Binary directly
+            // For GOG and GamePass, we try to launch the Binary directly
             let exe_path = std::path::Path::new(&game_path)
                 .join("Binaries")
                 .join("NMS.exe");
@@ -1358,7 +1337,6 @@ fn list_profiles() -> Result<Vec<String>, String> {
             }
         }
     }
-    // Optional: Sort the rest alphabetically (excluding Default)
     let mut others: Vec<String> = profiles.drain(1..).collect();
     others.sort();
     profiles.extend(others);
@@ -1403,7 +1381,6 @@ fn save_active_profile(profile_name: String, mods: Vec<ProfileSaveRequest>) -> R
     let json_str = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     fs::write(&json_path, json_str).map_err(|e| e.to_string())?;
 
-    // Backup MXML (Same as before)
     if let Some(game_path) = find_game_path() {
         let current_mxml = game_path.join("Binaries").join("SETTINGS").join("GCMODSETTINGS.MXML");
         if current_mxml.exists() {
@@ -1415,7 +1392,6 @@ fn save_active_profile(profile_name: String, mods: Vec<ProfileSaveRequest>) -> R
 
 #[tauri::command]
 async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<(), String> {
-    // ... [Load dirs logic same as before] ...
     let dir = get_profiles_dir()?;
     let json_path = dir.join(format!("{}.json", profile_name));
     let mxml_backup_path = dir.join(format!("{}.mxml", profile_name));
@@ -1427,7 +1403,6 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
         serde_json::from_str(&content).map_err(|e| e.to_string())?
     };
 
-    // ... [Purge Logic same as before] ...
     let game_path = find_game_path().ok_or("Game path not found")?;
     let mods_dir = game_path.join("GAMEDATA/MODS");
     if mods_dir.exists() {
@@ -1440,18 +1415,14 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
         }
     }
 
-    // 3. Restore GCMODSETTINGS.MXML
     let live_mxml = game_path.join("Binaries").join("SETTINGS").join("GCMODSETTINGS.MXML");
     println!("Applying Profile: {}", profile_name);
 
     if mxml_backup_path.exists() {
-        // Strategy: Read backup, Write to live (Truncate)
-        // This avoids file-lock issues that happen with delete/move
         let mut src = fs::File::open(&mxml_backup_path).map_err(|e| e.to_string())?;
-        let mut dst = fs::File::create(&live_mxml).map_err(|e| e.to_string())?; // create() truncates
+        let mut dst = fs::File::create(&live_mxml).map_err(|e| e.to_string())?;
         io::copy(&mut src, &mut dst).map_err(|e| e.to_string())?;
     } else {
-        // Write Clean Template
         fs::write(&live_mxml, CLEAN_MXML_TEMPLATE).map_err(|e| e.to_string())?;
     }
 
@@ -1461,12 +1432,8 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
 
     let total_mods = profile_data.mods.len();
     
-    // Iterate through the NEW struct structure
     for (i, entry) in profile_data.mods.iter().enumerate() {
         let archive_path = downloads_dir.join(&entry.filename);
-        
-        // OPTIONAL: Verify hash here before installing?
-        // For now, let's just install.
         
         app.emit("profile-progress", ProfileSwitchProgress {
             current: i + 1,
@@ -1485,22 +1452,18 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
                         
                         fs::rename(fs_entry.path(), &dest).map_err(|e| e.to_string())?;
 
-                        // --- NEW: Generate mod_info.json ---
-                        // If the profile has metadata for this zip, write it to the folder we just installed
                         if let Some(mid) = &entry.mod_id {
                             let info_path = dest.join("mod_info.json");
                             let info_json = serde_json::json!({
-                                "id": mid, // Legacy field
+                                "id": mid,
                                 "modId": mid,
                                 "fileId": entry.file_id,
                                 "version": entry.version
                             });
-                            // Write the file
                             if let Ok(json_str) = serde_json::to_string_pretty(&info_json) {
                                 fs::write(info_path, json_str).ok();
                             }
                         }
-                        // -----------------------------------
                      }
                      fs::remove_dir_all(temp_path).ok();
                 },
@@ -1593,7 +1556,7 @@ fn get_profile_mod_list(profile_name: String) -> Result<Vec<String>, String> {
     let content = fs::read_to_string(&json_path).map_err(|e| e.to_string())?;
     let data: ModProfileData = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
-    // Return just the list of filenames (e.g. ["ModA.zip", "ModB.pak"])
+    // Return just the list of filenames
     let filenames = data.mods.iter().map(|m| m.filename.clone()).collect();
     Ok(filenames)
 }
@@ -1634,6 +1597,83 @@ fn copy_profile(source_name: String, new_name: String) -> Result<(), String> {
         fs::write(&new_mxml, CLEAN_MXML_TEMPLATE).map_err(|e| e.to_string())?;
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+async fn login_to_nexus() -> Result<String, String> {
+    // 1. Generate a unique Request ID (UUID)
+    let uuid = Uuid::new_v4().to_string();
+    
+    // 2. Construct the WebSocket URL
+    let sso_url = Url::parse("wss://sso.nexusmods.com").map_err(|e| e.to_string())?;
+
+    // 3. Open the connection
+    let (ws_stream, _) = connect_async(sso_url.to_string())
+        .await
+        .map_err(|e| format!("Failed to connect: {}", e))?;
+        
+    let (mut write, mut read) = ws_stream.split();
+
+    // 4. Send the Handshake
+    let msg = serde_json::json!({
+        "id": uuid,
+        "token": null,
+        "protocol": 2
+    });
+
+    write.send(Message::Text(msg.to_string().into()))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 5. Open the User's Browser to authorize
+    let auth_url = format!("https://www.nexusmods.com/sso?id={}&application=singularity", uuid);
+    open::that(auth_url).map_err(|e| e.to_string())?;
+
+    // 6. Wait for the response (The API Key)
+    while let Some(message) = read.next().await {
+        let message = message.map_err(|e| e.to_string())?;
+        
+        if let Message::Text(text) = message {
+            let text_str = text.to_string(); 
+            let response: Value = serde_json::from_str(&text_str).map_err(|e| e.to_string())?;
+            
+            // Check for success data
+            if let Some(data) = response.get("data") {
+                if let Some(api_key) = data.get("api_key").and_then(|k| k.as_str()) {
+                    // 7. SAVE THE KEY
+                    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
+                    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
+                    let auth_path = exe_dir.join("auth.json");
+                    
+                    let auth_data = serde_json::json!({ "apikey": api_key });
+                    fs::write(auth_path, serde_json::to_string_pretty(&auth_data).unwrap()).map_err(|e| e.to_string())?;
+                    
+                    return Ok(api_key.to_string());
+                }
+            }
+            
+            // Check for errors
+            if let Some(success) = response.get("success").and_then(|s| s.as_bool()) {
+                if !success {
+                    return Err("Nexus refused the connection.".to_string());
+                }
+            }
+        }
+    }
+
+    Err("Connection closed before authentication finished.".to_string())
+}
+
+#[tauri::command]
+fn logout_nexus() -> Result<(), String> {
+    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
+    let auth_path = exe_dir.join("auth.json");
+    
+    if auth_path.exists() {
+        fs::remove_file(auth_path).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -1749,7 +1789,9 @@ fn main() {
             create_empty_profile,
             check_for_untracked_mods,
             get_profile_mod_list,
-            copy_profile
+            copy_profile,
+            login_to_nexus,
+            logout_nexus
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

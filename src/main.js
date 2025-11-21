@@ -11,7 +11,7 @@ const appWindow = getCurrentWindow();
 // --- Global State & Constants ---
 let NEXUS_API_KEY = "";
 const CURATED_LIST_URL = "https://raw.githubusercontent.com/Syzzle07/SingularityMM/refs/heads/data/curated/curated_list.json";
-let curatedData = []; // This will hold all pre-processed data from the server.
+let curatedData = [];
 let downloadHistory = [];
 const nexusModCache = new Map();
 const nexusFileCache = new Map();
@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsPath: null,
         versionType: null,
         currentFilePath: null,
-        activeProfile: 'Default', // The profile currently active in the game
-        selectedProfileView: 'Default', // The profile currently selected in the dropdown
+        activeProfile: 'Default',
+        selectedProfileView: 'Default',
         isProfileSwitching: false,
         xmlDoc: null,
         isPopulating: false,
@@ -149,34 +149,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showDialog(title, message, type = 'alert') {
         return new Promise((resolve) => {
-            // 1. Set Content
             genericDialogTitle.textContent = title || 'Singularity';
             genericDialogMessage.textContent = message;
-            genericDialogActions.innerHTML = ''; // Clear old buttons
+            genericDialogActions.innerHTML = '';
 
-            // 2. Create Buttons based on type
             if (type === 'confirm') {
-                // Cancel Button
                 const btnCancel = document.createElement('button');
                 btnCancel.className = 'modal-gen-btn-cancel';
                 btnCancel.textContent = 'Cancel';
                 btnCancel.onclick = () => {
                     genericDialogModal.classList.add('hidden');
-                    resolve(false); // Return FALSE
+                    resolve(false);
                 };
                 genericDialogActions.appendChild(btnCancel);
 
-                // OK Button
                 const btnOk = document.createElement('button');
                 btnOk.className = 'modal-gen-btn-confirm';
                 btnOk.textContent = 'OK';
                 btnOk.onclick = () => {
                     genericDialogModal.classList.add('hidden');
-                    resolve(true); // Return TRUE
+                    resolve(true);
                 };
                 genericDialogActions.appendChild(btnOk);
             } else {
-                // Alert (OK only)
                 const btnOk = document.createElement('button');
                 btnOk.className = 'modal-gen-btn-confirm';
                 btnOk.textContent = 'OK';
@@ -187,13 +182,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 genericDialogActions.appendChild(btnOk);
             }
 
-            // 3. Show Modal
             genericDialogModal.classList.remove('hidden');
         });
     }
 
-    // --- REPLACEMENTS ---
-    // Use these instead of window.alert or confirm
     window.customAlert = async (msg, title) => {
         await showDialog(title, msg, 'alert');
     };
@@ -308,22 +300,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Fetches the single source of truth for all mod data from the GitHub Action's output.
-     */
     async function fetchCuratedData() {
         // 1. First, try to load from the local cache.
         const cachedList = await loadCuratedListFromCache();
         if (cachedList) {
             curatedData = cachedList; // Use the cached data
             console.log(`Successfully loaded ${curatedData.length} mods from cache.`);
-            return; // We're done!
+            return;
         }
 
         // 2. If cache is missing or stale, fetch from the network.
         try {
             console.log("Fetching latest curated mod data from GitHub...");
-            // We can now remove the cache-busting timestamp from the URL
             const response = await fetch(CURATED_LIST_URL);
             if (!response.ok) throw new Error("Could not fetch remote curated list.");
 
@@ -331,12 +319,54 @@ document.addEventListener('DOMContentLoaded', () => {
             curatedData = freshData;
             console.log(`Successfully loaded ${curatedData.length} mods from network.`);
 
-            // 3. Save the freshly downloaded data to our cache for next time.
+            // 3. Save the freshly downloaded data to the cache for next time.
             await saveCuratedListToCache(freshData);
 
         } catch (error) {
             console.error("CRITICAL: Could not load curated mod data:", error);
             alert("Failed to load mod data from the server. Update checks and the browse tab will not work.");
+        }
+    }
+
+    // --- NEXUS LOGIN LOGIC ---
+    const nexusAuthBtn = document.getElementById('nexusAuthBtn');
+    const nexusAccountStatus = document.getElementById('nexusAccountStatus');
+
+    async function validateLoginState() {
+        try {
+            NEXUS_API_KEY = await invoke('get_nexus_api_key');
+
+            const headers = { "apikey": NEXUS_API_KEY };
+            const response = await fetch("https://api.nexusmods.com/v1/users/validate.json", { headers });
+
+            if (response.ok) {
+                const userData = await response.json();
+
+                nexusAccountStatus.textContent = `Connected as: ${userData.name}`;
+                nexusAccountStatus.classList.add('logged-in');
+
+                nexusAuthBtn.textContent = "Log Out";
+                nexusAuthBtn.className = "modal-btn-delete";
+                nexusAuthBtn.style.width = "100px";
+                nexusAuthBtn.style.padding = "5px";
+
+                return true;
+            } else {
+                throw new Error("Key invalid");
+            }
+        } catch (e) {
+            console.log("User not logged in:", e);
+
+            nexusAccountStatus.textContent = "Not connected";
+            nexusAccountStatus.classList.remove('logged-in');
+
+            nexusAuthBtn.textContent = "Log In";
+            nexusAuthBtn.className = "modal-btn-confirm";
+            nexusAuthBtn.style.width = "100px";
+            nexusAuthBtn.style.padding = "5px";
+
+            NEXUS_API_KEY = "";
+            return false;
         }
     }
 
@@ -366,15 +396,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Ensure Default Profile Exists
         const profiles = await invoke('list_profiles');
 
-        // We check if "Default.json" physically exists by trying to load it or just relying on logic.
-        // A simple way: Try to save it if it's the first run.
+        // We check if "Default.json" physically exists
         const activeProfileName = localStorage.getItem('activeProfile') || 'Default';
 
         if (activeProfileName === 'Default') {
-            // If we are on Default, let's ensure it's saved to disk so we don't lose current state
-            // BUT we only do this if we have valid mods to save.
+            // If is on Default, ensure it's saved to disk to not lose current state
+            // BUT only do this if it has valid mods to save.
 
-            const installedData = getDetailedInstalledMods(); // Your existing helper
+            const installedData = getDetailedInstalledMods();
 
             // Check for untracked/manual mods
             const hasUntracked = await invoke('check_for_untracked_mods');
@@ -387,28 +416,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Save the current state as Default immediately
-            // This creates the file so the user doesn't lose valid manager mods on switch
+            // This creates the file so the user doesn't lose valid mods on switch
             await invoke('save_active_profile', {
                 profileName: 'Default',
                 mods: installedData
             });
         }
 
-        // --- NEW, ROBUST GAME DETECTION ---
+        // --- GAME DETECTION ---
         const gamePaths = await invoke('detect_game_installation');
         if (gamePaths) {
             console.log(`Detected ${gamePaths.version_type} version of No Man's Sky.`);
 
             appState.gamePath = gamePaths.game_root_path;
             appState.settingsPath = gamePaths.settings_root_path;
-            appState.versionType = gamePaths.version_type; // <--- Store the version type!
+            appState.versionType = gamePaths.version_type;
 
-            // --- UPDATE LAUNCH BUTTON UI ---
+            // --- LAUNCH BUTTON UI ---
             const launchBtn = document.getElementById('launchGameBtn');
             const launchIcon = document.getElementById('launchIcon');
 
             launchBtn.classList.remove('disabled');
-            launchBtn.dataset.platform = appState.versionType; // For CSS glow coloring
+            launchBtn.dataset.platform = appState.versionType;
 
             // Set the correct icon
             if (appState.versionType === 'Steam') {
@@ -419,7 +448,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 launchIcon.src = '/src/assets/icon-xbox.png';
             }
         }
-        // --- END OF NEW LOGIC ---
 
         const hasGamePath = !!appState.gamePath;
         openModsFolderBtn.disabled = !hasGamePath;
@@ -442,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
             enableAllBtn.title = '';
             disableAllBtn.title = '';
             try {
-                // Now, we construct the full path to the settings file with confidence.
                 const settingsFilePath = await join(appState.settingsPath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
                 const content = await readTextFile(settingsFilePath);
                 await loadXmlContent(content, settingsFilePath);
@@ -451,12 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Listen for the nxm-link-received event from the Rust backend
         listen('nxm-link-received', (event) => {
             handleNxmLink(event.payload);
         });
 
-        // Load remote data and check for updates in the background
         loadDataInBackground();
     };
 
@@ -491,7 +516,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         modsToRender.forEach((modData, index) => {
-            // Populate the installedModsMap from the data we just received
             if (modData.local_info) {
                 const { mod_id, file_id, version } = modData.local_info;
                 if (mod_id && file_id && version) {
@@ -503,7 +527,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Build the HTML for the row
             const row = document.createElement('div');
             row.className = 'mod-row';
             row.dataset.modName = modData.folder_name;
@@ -516,7 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="enabled"><label class="switch"><input type="checkbox" class="enabled-switch" ${modData.enabled ? 'checked' : ''}><span class="slider"></span></label></div>
             `;
 
-            // Attach the event listener for the checkbox
             row.querySelector('.enabled-switch').addEventListener('change', async (e) => {
                 const modNode = Array.from(appState.xmlDoc.querySelectorAll('Property[name="Data"] > Property'))
                     .find(node => {
@@ -545,12 +567,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateModListStates() {
         if (!appState.xmlDoc) return;
 
-        // Get all the mod rows currently in the DOM
         const modRows = modListContainer.querySelectorAll('.mod-row');
 
         modRows.forEach(row => {
             const modName = row.dataset.modName;
-            // Find the XML node corresponding to this row
             const modNode = Array.from(appState.xmlDoc.querySelectorAll('Property[name="Data"] > Property'))
                 .find(node => {
                     const nameProp = node.querySelector('Property[name="Name"]');
@@ -558,10 +578,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
             if (modNode) {
-                // Get the latest "enabled" state from the XML
                 const isEnabled = modNode.querySelector('Property[name="Enabled"]')?.getAttribute('value').toLowerCase() === 'true';
 
-                // Find the checkbox in this row and update its state
                 const checkbox = row.querySelector('.enabled-switch');
                 if (checkbox && checkbox.checked !== isEnabled) {
                     checkbox.checked = isEnabled;
@@ -570,9 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /**
-     * Performs an update check using the pre-loaded curated data. Makes ZERO API calls.
-     */
     async function checkForUpdates(isSilent = false) {
         if (!appState.gamePath || curatedData.length === 0) {
             if (!isSilent) await window.customAlert("Mod data is not loaded. Cannot check for updates.", "Error");
@@ -588,9 +603,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modsWithUpdates = [];
 
-        // --- THIS IS THE FIX ---
-        // Instead of looping over the UI and reading files, we now loop over
-        // our fast in-memory cache, which already has all the mod info.
         for (const [modFolderName, cachedModData] of appState.modDataCache.entries()) {
             const localModInfo = cachedModData.local_info;
 
@@ -624,9 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        // --- END OF FIX ---
 
-        // The rest of the function for displaying the results is perfectly fine.
         if (isSilent) {
             modsWithUpdates.forEach(mod => {
                 const row = modListContainer.querySelector(`.mod-row[data-mod-name="${mod.folderName}"]`);
@@ -665,13 +675,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const cards = browseGridContainer.querySelectorAll('.mod-card');
         cards.forEach(card => {
             const modId = card.dataset.modId;
-            // Ensure we are checking the string version of the ID
             const isInstalled = appState.installedModsMap.has(String(modId));
 
-            // Toggle visual class
             card.classList.toggle('is-installed', isInstalled);
 
-            // Toggle badge
             const badge = card.querySelector('.mod-card-installed-badge');
             if (badge) {
                 badge.classList.toggle('hidden', !isInstalled);
@@ -690,9 +697,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDate(timestamp) {
         if (!timestamp) return '...';
-        // The timestamp from Rust is in seconds, JS Date needs milliseconds
         const date = new Date(timestamp * 1000);
-        return date.toLocaleDateString(); // Uses the user's local date format
+        return date.toLocaleDateString();
     }
 
     async function startModDownload({ modId, fileId, version, fileName, displayName, replacingFileId }, isUpdate = false) {
@@ -777,8 +783,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.createdAt = downloadResult.created_at;
 
                 if (isUpdate) {
-                    // This function already contains 'await saveCurrentProfile();'
-                    // so we don't need to add it here.
                     await handleDownloadItemInstall(downloadId, true);
                 } else {
                     item.statusText = 'Downloaded';
@@ -805,7 +809,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Log the complete state of the item we're opening the menu for.
         console.log("[CONTEXT MENU] Item data:", JSON.parse(JSON.stringify(itemData)));
 
         e.preventDefault();
@@ -883,19 +886,18 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             updateStatus(isUpdate ? 'Auto-Installing Update...' : 'Installing...', 'progress');
 
-            // This is the core Rust command that extracts and moves the mod.
+            // Core Rust command that extracts and moves the mod.
             const analysis = await invoke('install_mod_from_archive', { archivePathStr: item.archivePath });
 
             let oldArchiveToDelete = null;
 
-            // --- Handle Conflicts (Typically for Updates) ---
+            // --- Handle Conflicts ---
             if (analysis.conflicts && analysis.conflicts.length > 0) {
                 for (const conflict of analysis.conflicts) {
-                    // Find the download history item that corresponds to the mod folder being replaced.
                     const oldItemIndex = downloadHistory.findIndex(d => d.modFolderName === conflict.old_mod_folder_name);
                     if (oldItemIndex > -1) {
                         const oldItem = downloadHistory[oldItemIndex];
-                        // Ensure we don't delete the archive we're currently installing
+                        // Ensure it doesn't delete the archive it's currently installing
                         if (oldItem.archivePath && oldItem.id !== item.id) {
                             oldArchiveToDelete = oldItem.archivePath;
                             // Remove the old item from the history array
@@ -903,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    // If it's an auto-update, we always replace. Otherwise, ask the user.
+                    // If it's an auto-update, always replace. Otherwise, ask the user.
                     const shouldReplace = isUpdate ? true : await confirm(
                         `A mod with this ID is already installed ('${conflict.old_mod_folder_name}'). Replace it with '${conflict.new_mod_name}'?`,
                         { title: 'Mod Update Conflict', type: 'warning' }
@@ -1005,7 +1007,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- 1. Update the Mod Detail Panel (if it's open for this mod) ---
         if (!modDetailPanel.classList.contains('hidden') && modDetailName.dataset.modId === modIdStr) {
-            // Update the main download/manage button text
             const primaryBtn = modDetailInstallBtnContainer.querySelector('.mod-card-install-btn');
             if (primaryBtn) {
                 primaryBtn.textContent = isInstalled ? 'MANAGE FILES' : 'DOWNLOAD';
@@ -1013,20 +1014,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update the "Installed" version field in the metadata
             if (isInstalled) {
-                // This displays the version of the first installed file we find for that mod
                 modDetailInstalled.textContent = installedFiles.values().next().value || 'Installed';
             } else {
                 modDetailInstalled.textContent = 'N/A';
             }
         }
 
-        // --- 2. THIS IS THE FIX: Update the Mod Card in the Browse Grid ---
+        // --- 2. Update the Mod Card in the Browse Grid ---
         const card = browseGridContainer.querySelector(`.mod-card[data-mod-id="${modIdStr}"]`);
         if (card) {
             console.log(`Updating grid card for modId: ${modIdStr}. Is installed: ${isInstalled}`);
             const badge = card.querySelector('.mod-card-installed-badge');
 
-            // Use classList.toggle for a clean add/remove based on the isInstalled boolean
             card.classList.toggle('is-installed', isInstalled);
             if (badge) {
                 badge.classList.toggle('hidden', !isInstalled);
@@ -1039,7 +1038,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetchCuratedData();
 
         // 2. Once data is loaded, run the silent update check.
-        // This will now correctly populate the update indicators.
         if (appState.gamePath) {
             await checkForUpdates(true);
         }
@@ -1084,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     valA = a.size || 0;
                     valB = b.size || 0;
                     break;
-                default: // Default to 'date'
+                default:
                     valA = a.createdAt || parseInt(a.id.split('-')[1], 10);
                     valB = b.createdAt || parseInt(b.id.split('-')[1], 10);
                     break;
@@ -1157,7 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (statusEl) {
             statusEl.textContent = text;
-            statusEl.className = 'download-item-status'; // Reset classes
+            statusEl.className = 'download-item-status';
             statusEl.classList.add(`status-${statusClass}`);
         }
     }
@@ -1173,29 +1171,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modId = match[1];
         const fileId = match[2];
+        let fileInfo = null;
 
-        try {
-            const filesData = await fetchModFilesFromNexus(modId);
-            const fileInfo = filesData?.files.find(f => String(f.file_id) === fileId);
-            if (!fileInfo) {
-                throw new Error(`File ID ${fileId} not found for mod ${modId}.`);
+        // 1. Check Local Curated Data First
+        const localMod = curatedData.find(m => String(m.mod_id) === modId);
+        if (localMod && localMod.files) {
+            fileInfo = localMod.files.find(f => String(f.file_id) === fileId);
+            if (fileInfo) {
+                console.log("NXM Link: Found file info in local cache.");
             }
-
-            // Unlike the in-app download, we don't have the main mod title readily available,
-            // so we use the file's specific name as the best display name.
-            const displayName = fileInfo.name || fileInfo.file_name;
-
-            await startModDownload({
-                modId: modId,
-                fileId: fileId,
-                version: fileInfo.version,
-                fileName: fileInfo.file_name,
-                displayName: displayName
-            });
-
-        } catch (error) {
-            await window.customAlert(`Failed to process NXM link: ${error.message}`, "Error");
         }
+
+        // 2. FALLBACK: If not in local list, use API
+        if (!fileInfo) {
+            console.log("NXM Link: Mod not in local cache. Fetching from API...");
+            const filesData = await fetchModFilesFromNexus(modId);
+            if (filesData && filesData.files) {
+                fileInfo = filesData.files.find(f => String(f.file_id) === fileId);
+            }
+        }
+
+        if (!fileInfo) {
+            await window.customAlert(`File ID ${fileId} not found for mod ${modId}.`, "Error");
+            return;
+        }
+
+        // 3. Start Download
+        const displayName = fileInfo.name || fileInfo.file_name;
+
+        await startModDownload({
+            modId: modId,
+            fileId: fileId,
+            version: fileInfo.version,
+            fileName: fileInfo.file_name,
+            displayName: displayName,
+            replacingFileId: null
+        });
     }
 
     const reorderModsByList = async (orderedModNames) => {
@@ -1203,13 +1214,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Call the new Rust command, passing the desired order.
             const updatedXmlContent = await invoke('reorder_mods', { orderedModNames });
 
-            // 2. Load the perfectly sorted XML returned by the backend. This refreshes our state.
+            // 2. Load the perfectly sorted XML returned by the backend. This refreshes the state.
             await loadXmlContent(updatedXmlContent, appState.currentFilePath);
 
             // 3. The renderModList() called by loadXmlContent will automatically redraw the UI.
-            // No need to call saveChanges() here, as the backend has already saved the file implicitly
-            // by returning the content for us to manage. We just need to write it.
-            await saveChanges(); // This will write the new content to the file.
+            await saveChanges();
         } catch (error) {
             alert(`Error re-ordering mods: ${error}`);
             // If it fails, re-render the original list to avoid a broken UI state
@@ -1218,15 +1227,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function reorderModListUI(orderedModNames) {
-        // For efficiency, first create a Map of the existing DOM elements,
-        // so we can look them up instantly instead of searching the DOM repeatedly.
         const rowsMap = new Map();
         modListContainer.querySelectorAll('.mod-row').forEach(row => {
             rowsMap.set(row.dataset.modName, row);
         });
 
-        // Now, append the elements back to the container in the new, correct order.
-        // Appending an element that's already in the DOM simply moves it.
         orderedModNames.forEach(modName => {
             const rowElement = rowsMap.get(modName);
             if (rowElement) {
@@ -1234,7 +1239,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Finally, update the visible priority numbers to reflect the new order.
         modListContainer.querySelectorAll('.mod-row').forEach((row, index) => {
             const priorityInput = row.querySelector('.priority-input');
             if (priorityInput) {
@@ -1272,8 +1276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Save the changes to the XML in memory
         saveChanges();
 
-        // THIS IS THE FIX:
-        // Instead of rebuilding the whole list, just update the checkboxes.
         updateModListStates();
     };
 
@@ -1463,9 +1465,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return html;
     }
 
-    /**
-     * Fetches a download URL. This is one of the few remaining live API calls, as it's user-initiated.
-     */
     async function fetchDownloadUrlFromNexus(modId, fileId) {
         const url = `https://api.nexusmods.com/v1/games/nomanssky/mods/${modId}/files/${fileId}/download_link.json`;
         const headers = { "apikey": NEXUS_API_KEY };
@@ -1476,28 +1475,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return data[0]?.URI;
         } catch (error) {
             console.error(`Failed to get download URL for mod ${modId}:`, error);
-            return null;
-        }
-    }
-
-    async function fetchModDataFromNexus(modId) {
-        const modIdStr = String(modId);
-        if (nexusModCache.has(modIdStr)) {
-            return nexusModCache.get(modIdStr);
-        }
-        const url = `https://api.nexusmods.com/v1/games/nomanssky/mods/${modIdStr}.json`;
-        const headers = { "apikey": NEXUS_API_KEY };
-        try {
-            const response = await fetch(url, { headers });
-            if (!response.ok) {
-                console.error(`Nexus API error for mod ID ${modIdStr}: ${response.status}`);
-                return null;
-            }
-            const data = await response.json();
-            nexusModCache.set(modIdStr, data);
-            return data;
-        } catch (error) {
-            console.error(`Failed to fetch data for mod ID ${modIdStr}:`, error);
             return null;
         }
     }
@@ -1600,10 +1577,9 @@ document.addEventListener('DOMContentLoaded', () => {
             reorderModListUI(finalModOrder);
 
             // 2. In the background, tell the backend to save the new order.
-            // We don't need to re-render again after this, as the UI is already correct.
             invoke('reorder_mods', { orderedModNames: finalModOrder })
                 .then(async (updatedXmlContent) => {
-                    // 3. Silently update our in-memory data to match what was saved.
+                    // 3. Silently update the in-memory data to match what was saved.
                     appState.xmlDoc = new DOMParser().parseFromString(updatedXmlContent, "application/xml");
                     await saveChanges();
                     await saveCurrentProfile();
@@ -1611,7 +1587,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .catch(async error => {
                     await window.customAlert(`Error saving new mod order: ${error}`, "Error");
-                    // If saving fails, we should probably re-render to revert the UI change.
                     renderModList();
                 });
         } else {
@@ -1645,10 +1620,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function filterAndDisplayMods() {
         const searchTerm = browseSearchInput.value.toLowerCase();
-        const filterBy = browseFilterSelect.value; // Read from the new filter dropdown
-        const sortBy = browseSortSelect.value;     // Read from the sort dropdown
+        const filterBy = browseFilterSelect.value;
+        const sortBy = browseSortSelect.value;
 
-        let processedMods = [...curatedData]; // Start with a full copy
+        let processedMods = [...curatedData];
 
         // --- STAGE 1: FILTERING ---
 
@@ -1695,18 +1670,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!modData) continue;
             const card = template.content.cloneNode(true).firstElementChild;
             card.dataset.modId = modData.mod_id;
-            // --- THIS IS THE NEW LOGIC ---
-            // Check if this mod is in our map of installed mods.
             const modIdStr = String(modData.mod_id);
             if (appState.installedModsMap.has(modIdStr)) {
 
-                // 1. Add the 'is-installed' class to the main card to trigger the border.
                 card.classList.add('is-installed');
 
-                // 2. Make the badge container visible.
                 card.querySelector('.mod-card-installed-badge').classList.remove('hidden');
             }
-            // --- END OF NEW LOGIC ---
+
             const titleElement = card.querySelector('.mod-card-title');
 
             card.querySelector('.mod-card-thumbnail').src = modData.picture_url || '/src/assets/placeholder.png';
@@ -1747,25 +1718,23 @@ document.addEventListener('DOMContentLoaded', () => {
         modDetailUpdated.textContent = formatNexusDate(modData.updated_timestamp, currentLang);
         modDetailCreated.textContent = formatNexusDate(modData.created_timestamp, currentLang);
 
-        // --- THIS IS THE NEW, CORRECTED LOGIC FOR THE "INSTALLED" FIELD ---
         const modIdStr = String(modData.mod_id);
-        const installedFiles = appState.installedModsMap.get(modIdStr); // This is our Map<fileId, version>
+        const installedFiles = appState.installedModsMap.get(modIdStr);
 
-        let versionToShow = 'N/A'; // Default value
+        let versionToShow = 'N/A';
 
         if (installedFiles && installedFiles.size > 0) {
-            // We have installed files. Now let's try to find the main one.
             let mainFileVersion = null;
             const allModFilesFromCurated = modData.files || [];
 
             // Loop through all the files that are INSTALLED for this mod.
             for (const installedFileId of installedFiles.keys()) {
-                // Find the full data for this installed file from our curated list.
+                // Find the full data for this installed file from the curated list.
                 const fileData = allModFilesFromCurated.find(f => String(f.file_id) === installedFileId);
 
-                // If we find its data and its category is "MAIN"...
+                // If it find its data and its category is "MAIN"...
                 if (fileData && fileData.category_name === 'MAIN') {
-                    // ...we've found our priority version!
+                    // found the priority version
                     mainFileVersion = installedFiles.get(installedFileId);
                     break; // No need to look further.
                 }
@@ -1773,16 +1742,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Now, decide what to display.
             if (mainFileVersion) {
-                // If we found a main file version, that's what we show.
+                // If found a main file version, that's what it show.
                 versionToShow = mainFileVersion;
             } else {
-                // Otherwise, no main file is installed. Fall back to showing the first installed version we have.
+                // Otherwise, no main file is installed. Fall back to showing the first installed version it has.
                 versionToShow = installedFiles.values().next().value || 'N/A';
             }
         }
 
         modDetailInstalled.textContent = versionToShow;
-        // --- END OF CORRECTION ---
 
         modDetailInstallBtnContainer.innerHTML = '';
         const primaryBtn = document.createElement('button');
@@ -1796,8 +1764,6 @@ document.addEventListener('DOMContentLoaded', () => {
         changelogBtn.className = 'detail-action-btn';
         changelogBtn.textContent = 'Changelogs';
         changelogBtn.onclick = () => {
-            // NO API CALL. We use the data already loaded in modData.
-            // modData comes from curatedData, which now includes .changelogs
             const changelogs = modData.changelogs || {};
             displayChangelogs(modData.name, changelogs);
         };
@@ -1841,10 +1807,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const fileIdStr = String(file.file_id);
             const installedVersionForThisFile = installedFilesForThisMod ? installedFilesForThisMod.get(fileIdStr) : undefined;
 
-            // This is the raw, original filename (e.g., ModName-1234-1-0.zip)
+            // This is the raw, original filename
             const rawFileName = file.file_name;
 
-            // NEW: Track which file ID we are replacing (if any)
+            // Track which file ID it's replacing (if any)
             // If this remains empty string "", nothing will be deleted.
             let replacingFileId = "";
 
@@ -1854,7 +1820,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isUpToDate) {
                     buttonHtml = `<button class="mod-card-install-btn" disabled>INSTALLED</button>`;
                 } else {
-                    // Rare case: Updating the exact same file ID (usually Nexus makes new IDs for updates)
+                    // Updating the exact same file ID
                     replacingFileId = fileIdStr;
                     buttonHtml = `<button class="mod-card-install-btn" data-file-id="${fileIdStr}" data-mod-id="${modId}" data-version="${file.version}" data-raw-filename="${rawFileName}" data-replacing-file-id="${replacingFileId}">UPDATE</button>`;
                 }
@@ -1863,16 +1829,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 let isUpdateForAnotherFile = false;
 
                 if (installedFilesForThisMod) {
-                    // Check if we have another file installed for this mod that matches the Category (e.g. MAIN vs OPTIONAL)
+                    // Check if it has another file installed for this mod that matches the Category (e.g. MAIN vs OPTIONAL)
                     for (const [installedFileId, installedVersion] of installedFilesForThisMod.entries()) {
                         const installedFileOnNexus = filesData.files.find(f => String(f.file_id) === installedFileId);
 
-                        // LOGIC FIX: Only mark as "Update" (and mark for deletion) if categories match.
-                        // This prevents an Optional file from deleting a Main file.
+                        // Only mark as "Update" (and mark for deletion) if categories match.
                         if (installedFileOnNexus && installedFileOnNexus.category_name === file.category_name) {
                             if (isNewerVersionAvailable(installedVersion, file.version)) {
                                 isUpdateForAnotherFile = true;
-                                replacingFileId = installedFileId; // <--- Store the ID of the OLD file to delete
+                                replacingFileId = installedFileId; // Store the ID of the OLD file to delete
                                 break;
                             }
                         }
@@ -1881,11 +1846,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const buttonText = isUpdateForAnotherFile ? 'UPDATE' : 'DOWNLOAD';
 
-                // We add the data-replacing-file-id attribute to the button so the click listener can read it
+                // Add the data-replacing-file-id attribute to the button so the click listener can read it
                 buttonHtml = `<button class="mod-card-install-btn" data-file-id="${fileIdStr}" data-mod-id="${modId}" data-version="${file.version}" data-raw-filename="${rawFileName}" data-replacing-file-id="${replacingFileId}">${buttonText}</button>`;
             }
 
-            // The clean name for display (e.g., "sHealthcare - Powerless Stations")
+            // The clean name for display
             const displayName = file.name || file.file_name;
 
             item.innerHTML = `
@@ -1944,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', () => {
         infoNexusLink.classList.add('hidden');
 
         const modFolderName = modRow.dataset.modName;
-        // --- PERFORMANCE FIX: Read from our fast in-memory cache ---
+        // --- Read from the in-memory cache ---
         const cachedModData = appState.modDataCache.get(modFolderName);
 
         if (!cachedModData) {
@@ -1966,7 +1931,7 @@ document.addEventListener('DOMContentLoaded', () => {
             infoInstalledVersion.textContent = '...';
         }
 
-        // Now, find the remote info (this is also fast, as it's in memory)
+        // Now, find the remote info
         const modId = localModInfo?.mod_id;
         const remoteInfo = modId ? curatedData.find(m => String(m.mod_id) === String(modId)) : null;
 
@@ -1994,7 +1959,6 @@ document.addEventListener('DOMContentLoaded', () => {
             infoLatestVersion.classList.add('update-available');
         }
 
-        // Set Nexus link
         if (remoteInfo?.mod_id) {
             infoNexusLink.href = `https://www.nexusmods.com/nomanssky/mods/${remoteInfo.mod_id}`;
             infoNexusLink.classList.remove('hidden');
@@ -2003,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modInfoPanel.classList.remove('hidden');
     }
 
-    // --- UI Event Listeners ---
+    // --- Event Listeners ---
 
     customCloseBtn.addEventListener('click', () => appWindow.close());
 
@@ -2077,40 +2041,31 @@ document.addEventListener('DOMContentLoaded', () => {
             );
             if (confirmed) {
                 try {
-                    // Call the Rust command. It handles file deletion and returns the new data for the UI.
                     const modsToRender = await invoke('delete_mod', { modName: modName });
 
-                    // Re-sync the in-memory XML document to reflect the deletion.
                     try {
                         const settingsPath = await join(appState.gamePath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
                         const content = await readTextFile(settingsPath);
                         appState.xmlDoc = new DOMParser().parseFromString(content, "application/xml");
                     } catch (e) {
                         console.error("Failed to re-sync xmlDoc after deletion:", e);
-                        // Force a reload to prevent a de-synced state, which is safer for the user.
                         location.reload();
                         return;
                     }
 
-                    // Re-render the main mod list UI efficiently.
                     await renderModList(modsToRender);
 
-                    // Find the corresponding item in the download history to update its state.
                     const deletedItem = downloadHistory.find(item => item.modFolderName && item.modFolderName.toUpperCase() === modName.toUpperCase());
                     if (deletedItem) {
-                        // Revert the status from "Installed" back to "Downloaded".
                         deletedItem.statusText = 'Downloaded';
                         deletedItem.statusClass = 'success';
 
                         const modIdToUpdate = deletedItem.modId;
 
-                        // Clear the folder name association.
                         deletedItem.modFolderName = null;
 
-                        // Save the updated download history.
                         await saveDownloadHistory(downloadHistory);
 
-                        // If we found the item, we also have its modId, so we can update the browse tab UI.
                         if (modIdToUpdate) {
                             updateModDisplayState(modIdToUpdate);
                         }
@@ -2280,20 +2235,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const setupDragAndDrop = async () => {
         console.log("Setting up Drag & Drop listeners...");
 
-        // Helper to handle visual feedback (Highlight only)
+        // Helper to handle visual feedback
         const showHighlight = () => {
-            // We do NOT remove 'hidden' here because the app controls that based on game path
             dropZone.classList.add('drag-over');
         };
 
         const hideHighlight = () => {
             dropZone.classList.remove('drag-over');
-            // We do NOT add 'hidden' here. The dropzone should stay visible.
         };
 
         // --- 1. Hover Events ---
         const onDragEnter = (event) => {
-            // Ignore if user is rearranging rows inside the list
             if (dragState.draggedElement) return;
 
             console.log("Drag enter detected");
@@ -2376,10 +2328,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             fileId: null,
                             version: 'Manual',
                             displayName: fileName,
-                            fileName: fileName, // Now resides in downloads folder
+                            fileName: fileName,
                             statusText: 'Installed',
                             statusClass: 'installed',
-                            archivePath: analysis.active_archive_path, // We can reconstruct this if needed, or fetch from Rust response
+                            archivePath: analysis.active_archive_path,
                             modFolderName: analysis.successes[0].name,
                             size: 0,
                             createdAt: Date.now() / 1000
@@ -2471,17 +2423,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 profileSelect.value = 'Default';
             }
 
-            // Note: We do NOT update appState.activeProfile here. 
-            // That prevents the bug where it auto-resets to Default on delete.
             updateApplyButtonVisibility();
         } catch (err) {
             console.error("Failed to refresh profiles:", err);
         }
     }
 
-    // ---------------------------------------------------------
-    // --- mp PROFILE MANAGER LOGIC (The "Manage" Button) ---
-    // ---------------------------------------------------------
+    // --- PROFILE MANAGER LOGIC ---
 
     const openProfileManagerBtn = document.getElementById('openProfileManagerBtn');
     const profileManagerModal = document.getElementById('profileManagerModal');
@@ -2534,11 +2482,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close Modal Logic
     const closeManager = () => profileManagerModal.classList.add('hidden');
     document.getElementById('mpCloseBtn').addEventListener('click', closeManager);
-    // document.getElementById('closeProfileManagerX').addEventListener('click', closeManager);
 
     // --- MODAL ACTION BUTTONS ---
 
-    // 1. CREATE (Inside Modal)
+    // 1. ADD
     document.getElementById('mpCreateBtn').addEventListener('click', async () => {
         const name = prompt("Enter new profile name:");
         if (name && name.trim() !== "") {
@@ -2556,7 +2503,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 2. COPY (The new feature!)
+    // 2. COPY
     document.getElementById('mpCopyBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
 
@@ -2577,7 +2524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 3. RENAME (Inside Modal)
+    // 3. RENAME
     document.getElementById('mpRenameBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
         if (selectedProfileInModal === 'Default') return await window.customAlert("Cannot rename Default profile.", "Action Denied");
@@ -2602,7 +2549,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 4. REMOVE (Inside Modal)
+    // 4. DELETE
     document.getElementById('mpRemoveBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
         if (selectedProfileInModal === 'Default') return await window.customAlert("Cannot delete Default profile.", "Action Denied");
@@ -2648,10 +2595,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Helper: Get list of currently installed mod archive filenames based on downloadHistory
     function getDetailedInstalledMods() {
         const installedMods = [];
-        const seen = new Set(); // To prevent duplicates
+        const seen = new Set();
 
         downloadHistory.forEach(item => {
             if (item.statusClass === 'installed' && item.fileName) {
@@ -2673,21 +2619,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.isPopulating) return;
         if (!appState.activeProfile) return;
 
-        // Use the new helper
         const modsData = getDetailedInstalledMods();
 
         try {
             await invoke('save_active_profile', {
                 profileName: appState.activeProfile,
-                mods: modsData // This now sends the array of objects
+                mods: modsData
             });
             console.log(`Auto-saved profile: ${appState.activeProfile}`);
         } catch (e) {
             console.error("Failed to auto-save profile:", e);
         }
     }
-
-    // --- LISTENERS ---
 
     profileSelect.addEventListener('change', updateApplyButtonVisibility);
 
@@ -2699,8 +2642,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 await refreshProfileList();
 
-                profileSelect.value = name; // Select the new one
-                updateApplyButtonVisibility(); // Button will appear
+                profileSelect.value = name;
+                updateApplyButtonVisibility();
 
             } catch (e) { await window.customAlert("Error creating profile: " + e, "Error"); }
         }
@@ -2715,7 +2658,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await invoke('rename_profile', { oldName: current, newName: newName });
 
-                // If we renamed the active profile, update the state
+                // If renamed the active profile, update the state
                 if (appState.activeProfile === current) {
                     appState.activeProfile = newName;
                     localStorage.setItem('activeProfile', newName);
@@ -2739,17 +2682,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 1. Refresh the list (the deleted profile will disappear)
                 await refreshProfileList();
 
-                // 2. Check if we just deleted the Active Profile
+                // 2. Check if it deleted the Active Profile
                 if (appState.activeProfile === current) {
-                    // CRITICAL: Set active profile to NULL.
-                    // This tells the system: "We are in limbo. No profile is applied."
                     appState.activeProfile = null;
                     localStorage.removeItem('activeProfile');
 
                     // Force dropdown to Default
                     profileSelect.value = 'Default';
                 } else {
-                    // If we deleted an inactive profile, make sure dropdown stays on the current active one
+                    // If it deleted an inactive profile, make sure dropdown stays on the current active one
                     if (appState.activeProfile) {
                         profileSelect.value = appState.activeProfile;
                     }
@@ -2808,13 +2749,12 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('activeProfile', targetProfile);
             updateApplyButtonVisibility();
 
-            // 4. Force reload of XML from disk (now that we used the robust write)
+            // 4. Force reload of XML from disk
             const settingsPath = await join(appState.gamePath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
             const content = await readTextFile(settingsPath);
-            await loadXmlContent(content, settingsPath); // This calls renderModList internally
+            await loadXmlContent(content, settingsPath);
 
             // 5. Explicitly call refreshBrowseTabBadges AFTER renderModList finishes
-            // We put it in a slight timeout to ensure the DOM has settled
             setTimeout(() => {
                 refreshBrowseTabBadges();
             }, 100);
@@ -2830,20 +2770,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initialize
-    (async () => {
-        await refreshProfileList(); // Build the dropdown options
-
-        // Load the last active profile from storage
-        const savedProfile = localStorage.getItem('activeProfile') || 'Default';
-        appState.activeProfile = savedProfile;
-
-        // Ensure the dropdown matches the internal state
-        profileSelect.value = savedProfile;
-
-        updateApplyButtonVisibility();
-    })();
-
     async function syncDownloadHistoryWithProfile(profileName) {
         try {
             // 1. Get the list of zips that SHOULD be installed according to the profile
@@ -2852,7 +2778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. Loop through history and update statuses
             let changed = false;
             downloadHistory.forEach(item => {
-                // Check if this item's filename exists in the profile we just loaded
+                // Check if this item's filename exists in the profile just loaded
                 const shouldBeInstalled = profileFiles.includes(item.fileName);
 
                 if (shouldBeInstalled) {
@@ -2877,16 +2803,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Download history synchronized with profile.");
             }
 
-            // 4. Also update the Browse Grid cards (visuals)
-            // We need to iterate all cards or just reload the grid if active
+            // 4. Also update the Browse Grid cards
             if (!browseView.classList.contains('hidden')) {
-                // Quick refresh of visual badges
                 const allCards = browseGridContainer.querySelectorAll('.mod-card');
                 allCards.forEach(card => {
                     const modId = card.dataset.modId;
-                    // This is a bit heavy, but correct: updateModDisplayState relies on appState.installedModsMap
-                    // which is updated via renderModList -> XML. 
-                    // So actually, visual badges might update automatically if renderModList ran first.
                 });
             }
 
@@ -2916,17 +2837,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     browseGridContainer.addEventListener('click', (e) => {
-        // --- THIS IS THE NEW LOGIC ---
-        // Remove 'selected' from any previously selected card
         const previouslySelected = browseGridContainer.querySelector('.mod-card.selected');
         if (previouslySelected) {
             previouslySelected.classList.remove('selected');
         }
-        // --- END OF NEW LOGIC ---
 
         const clickedCard = e.target.closest('.mod-card');
         if (clickedCard) {
-            // Add 'selected' to the newly clicked card
             clickedCard.classList.add('selected');
 
             const modId = parseInt(clickedCard.dataset.modId, 10);
@@ -2942,13 +2859,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentSize = await appWindow.innerSize();
         await appWindow.setSize(new LogicalSize(DEFAULT_WIDTH, currentSize.height));
 
-        // --- THIS IS THE NEW LOGIC ---
-        // When the panel closes, find the selected card and remove the highlight
         const currentlySelected = browseGridContainer.querySelector('.mod-card.selected');
         if (currentlySelected) {
             currentlySelected.classList.remove('selected');
         }
-        // --- END OF NEW LOGIC ---
     });
 
     browseView.addEventListener('click', (e) => {
@@ -2996,7 +2910,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. In the background, save the changes.
         invoke('reorder_mods', { orderedModNames: currentOrder })
             .then(async (updatedXmlContent) => {
-                // 3. Silently update our in-memory data.
+                // 3. Silently update the in-memory data.
                 appState.xmlDoc = new DOMParser().parseFromString(updatedXmlContent, "application/xml");
                 await saveChanges();
                 await saveCurrentProfile();
@@ -3004,7 +2918,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(async error => {
                 await window.customAlert(`Error saving new mod order: ${error}`, "Error");
-                renderModList(); // Revert on error
+                renderModList();
             });
 
         closePriorityModal()
@@ -3030,7 +2944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const displayName = itemElement.querySelector('.update-item-name').textContent.split(' (v')[0];
             const rawFileName = button.dataset.rawFilename;
 
-            // NEW: Get the ID to delete
+            // Get the ID to delete
             const replacingFileId = button.dataset.replacingFileId;
 
             button.disabled = true;
@@ -3042,7 +2956,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 version: version,
                 fileName: rawFileName,
                 displayName: displayName,
-                replacingFileId: replacingFileId // <--- Pass it here
+                replacingFileId: replacingFileId
             }, isUpdate);
         }
     });
@@ -3124,13 +3038,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // --- NEW LOGIC FLOW ---
-        nxmHandlerBtn.disabled = true; // Disable button while modal is open
+        nxmHandlerBtn.disabled = true;
         const isCurrentlyRegistered = await invoke('is_protocol_handler_registered');
         let confirmed = false;
 
         if (isCurrentlyRegistered) {
-            // Ask for confirmation to REMOVE the handler
             confirmed = await window.customConfirm(
                 'Singularity is currently the default handler for NXM links.\nDo you want to remove this association?',
                 'Remove NXM Handler'
@@ -3145,7 +3057,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            // Ask for confirmation to SET the handler
             confirmed = await window.customConfirm(
                 'Do you want to set Singularity as the default application for "Mod Manager Download" (nxm://) links?',
                 'Set NXM Handler'
@@ -3161,7 +3072,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        nxmHandlerBtn.disabled = false; // Re-enable button
+        nxmHandlerBtn.disabled = false;
     });
 
     gridGapSlider.addEventListener('input', () => {
@@ -3179,16 +3090,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sortKey = clickedHeader.dataset.sort;
 
-        // If clicking the same header again, reverse the direction.
         if (downloadSortState.key === sortKey) {
             downloadSortState.direction = downloadSortState.direction === 'asc' ? 'desc' : 'asc';
         } else {
-            // Otherwise, set the new key and default to descending order.
             downloadSortState.key = sortKey;
             downloadSortState.direction = 'desc';
         }
 
-        // Re-render the list with the new sort order.
         renderDownloadHistory();
     });
 
@@ -3213,8 +3121,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // 3. RESET UI STATE (After a delay)
-            // Since we can't easily track exactly when the game window appears,
-            // we set a 5-second timeout to let the user know the command was sent.
             setTimeout(() => {
                 launchBtn.classList.remove('is-launching');
                 launchText.textContent = originalText;
@@ -3228,12 +3134,76 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- App Initialization ---
+    nexusAuthBtn.addEventListener('click', async () => {
+        const isLoggedIn = nexusAccountStatus.classList.contains('logged-in');
 
-    // Start the main application logic
-    initializeApp().catch(e => console.error("App Init failed:", e));
+        // LOGOUT
+        if (isLoggedIn) {
+            const confirmed = await window.customConfirm("Are you sure you want to disconnect your Nexus Mods account?", "Log Out");
+            if (confirmed) {
+                await invoke('logout_nexus');
+                await validateLoginState();
+            }
+            return;
+        }
 
-    // Start the Drag and Drop logic (independent of app init)
-    setupDragAndDrop().catch(e => console.error("DragDrop Init failed:", e));
+        // LOGIN
+        try {
+            nexusAccountStatus.textContent = "Waiting for browser...";
+            nexusAuthBtn.disabled = true; // Prevent double clicks
+
+            // Calls Rust -> Opens Browser -> Waits for Socket
+            const newKey = await invoke('login_to_nexus');
+
+            if (newKey) {
+                await window.customAlert("Successfully logged in!", "Success");
+                await validateLoginState();
+            }
+        } catch (error) {
+            await window.customAlert(`Login Failed: ${error}`, "Error");
+            // Reset UI on failure
+            await validateLoginState();
+        } finally {
+            nexusAuthBtn.disabled = false;
+        }
+    });
+
+    (async () => {
+        try {
+            console.log("Starting App Initialization...");
+
+            // 1. Check Login Status & Load API Key
+            await validateLoginState();
+
+            // 2. Initialize Main App Logic
+            await initializeApp();
+
+            // 3. Initialize Profile System
+            await refreshProfileList();
+
+            const savedProfile = localStorage.getItem('activeProfile') || 'Default';
+            appState.activeProfile = savedProfile;
+
+            // Safety Check: Ensure the saved profile actually exists in the list
+            const availableProfiles = Array.from(profileSelect.options).map(opt => opt.value);
+            if (availableProfiles.includes(savedProfile)) {
+                profileSelect.value = savedProfile;
+            } else {
+                console.warn(`Saved profile '${savedProfile}' not found. Resetting to Default.`);
+                profileSelect.value = 'Default';
+                appState.activeProfile = 'Default';
+            }
+
+            updateApplyButtonVisibility();
+
+            // 4. Initialize Drag & Drop
+            await setupDragAndDrop();
+
+            console.log("Initialization Complete.");
+
+        } catch (error) {
+            console.error("Critical Initialization Error:", error);
+        }
+    })();
 
 });
