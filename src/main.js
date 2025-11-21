@@ -331,9 +331,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const nexusAuthBtn = document.getElementById('nexusAuthBtn');
     const nexusAccountStatus = document.getElementById('nexusAccountStatus');
 
-    async function validateLoginState() {
+    async function validateLoginState(preloadedKey = null) {
         try {
-            NEXUS_API_KEY = await invoke('get_nexus_api_key');
+            if (preloadedKey) {
+                NEXUS_API_KEY = preloadedKey;
+            } else {
+                NEXUS_API_KEY = await invoke('get_nexus_api_key');
+            }
 
             const headers = { "apikey": NEXUS_API_KEY };
             const response = await fetch("https://api.nexusmods.com/v1/users/validate.json", { headers });
@@ -351,10 +355,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 return true;
             } else {
-                throw new Error("Key invalid");
+                throw new Error("Key validation failed with Nexus.");
             }
         } catch (e) {
-            console.log("User not logged in:", e);
+            // Clean handling: Don't spam console if it's just a missing key
+            const errorStr = String(e);
+            if (!errorStr.includes("No API Key found")) {
+                console.warn("Login check:", e);
+            }
 
             nexusAccountStatus.textContent = "Not connected";
             nexusAccountStatus.classList.remove('logged-in');
@@ -370,13 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const initializeApp = async () => {
-        try {
-            NEXUS_API_KEY = await invoke('get_nexus_api_key');
-        } catch (error) {
-            console.error("CRITICAL: Could not fetch Nexus API Key from backend.", error);
-            await window.customAlert("Could not load API Key. Mod download and update features will be disabled.", "API Error");
-        }
-
         const savedLang = localStorage.getItem('selectedLanguage') || 'en';
         languageSelector.value = savedLang;
         await i18n.loadLanguage(savedLang);
@@ -392,6 +393,16 @@ document.addEventListener('DOMContentLoaded', () => {
         gridGapSlider.value = savedGridGap;
         gridGapValue.textContent = `${savedGridGap}px`;
 
+        // Check for untracked/manual mods
+        const hasUntracked = await invoke('check_for_untracked_mods');
+
+        if (hasUntracked) {
+            await window.customAlert(
+                "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThe 'Default' profile has been created, but it CANNOT restore these manual mods if you switch profiles.\n\nTo fix this, please delete them and reinstall them by dragging their .zip files into the Manager.",
+                "Warning"
+            );
+        }
+
         // 1. Ensure Default Profile Exists
         const profiles = await invoke('list_profiles');
 
@@ -403,16 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // BUT only do this if it has valid mods to save.
 
             const installedData = getDetailedInstalledMods();
-
-            // Check for untracked/manual mods
-            const hasUntracked = await invoke('check_for_untracked_mods');
-
-            if (hasUntracked) {
-                await window.customAlert(
-                    "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThe 'Default' profile has been created, but it CANNOT restore these manual mods if you switch profiles.\n\nTo fix this, please delete them and reinstall them by dragging their .zip files into the Manager.",
-                    "Warning"
-                );
-            }
 
             // Save the current state as Default immediately
             // This creates the file so the user doesn't lose valid mods on switch
@@ -3156,7 +3157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (newKey) {
                 await window.customAlert("Successfully connected!", "Success");
-                await validateLoginState();
+                await validateLoginState(newKey);
             }
         } catch (error) {
             await window.customAlert(`Login Failed: ${error}`, "Error");
@@ -3191,6 +3192,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn(`Saved profile '${savedProfile}' not found. Resetting to Default.`);
                 profileSelect.value = 'Default';
                 appState.activeProfile = 'Default';
+                localStorage.setItem('activeProfile', 'Default');
             }
 
             updateApplyButtonVisibility();

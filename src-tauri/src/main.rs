@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri::{LogicalSize, PhysicalPosition};
 use unrar;
 use winreg::enums::*;
@@ -212,7 +212,9 @@ fn find_game_path() -> Option<PathBuf> {
     if cfg!(not(windows)) {
         return None;
     }
-    find_steam_path().or_else(find_gog_path)
+    find_steam_path()
+        .or_else(find_gog_path)
+        .or_else(find_gamepass_path)
 }
 
 fn find_gog_path() -> Option<PathBuf> {
@@ -1040,17 +1042,16 @@ fn ensure_mod_info(
 }
 
 #[tauri::command]
-fn get_nexus_api_key() -> Result<String, String> {
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let auth_path = exe_dir.join("auth.json");
+fn get_nexus_api_key(app: tauri::AppHandle) -> Result<String, String> {
+    let auth_path = get_auth_file_path(&app)?;
 
     if auth_path.exists() {
         let content = fs::read_to_string(auth_path).map_err(|e| e.to_string())?;
-        let json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        // Parse JSON safely
+        let json: Value = serde_json::from_str(&content).map_err(|_| "Invalid auth file".to_string())?;
         
         if let Some(key) = json.get("apikey").and_then(|k| k.as_str()) {
-            println!("Loaded API Key from auth.json");
+            println!("Loaded API Key from AppData");
             return Ok(key.to_string());
         }
     }
@@ -1213,6 +1214,16 @@ fn launch_game(version_type: String, game_path: String) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn get_auth_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    
+    if !app_data_dir.exists() {
+        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(app_data_dir.join("auth.json"))
 }
 
 // --- PROFILE MANAGEMENT ---
@@ -1510,7 +1521,7 @@ fn copy_profile(source_name: String, new_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn login_to_nexus() -> Result<String, String> {
+async fn login_to_nexus(app: tauri::AppHandle) -> Result<String, String> {
     // 1. Generate a unique Request ID (UUID)
     let uuid = Uuid::new_v4().to_string();
     
@@ -1536,7 +1547,7 @@ async fn login_to_nexus() -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     // 5. Open the User's Browser to authorize
-    let auth_url = format!("https://www.nexusmods.com/sso?id={}&application=singularity", uuid);
+    let auth_url = format!("https://www.nexusmods.com/sso?id={}&application=syzzle07-singularity", uuid);
     open::that(auth_url).map_err(|e| e.to_string())?;
 
     // 6. Wait for the response (The API Key)
@@ -1550,14 +1561,15 @@ async fn login_to_nexus() -> Result<String, String> {
             // Check for success data
             if let Some(data) = response.get("data") {
                 if let Some(api_key) = data.get("api_key").and_then(|k| k.as_str()) {
-                    // 7. SAVE THE KEY
-                    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-                    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-                    let auth_path = exe_dir.join("auth.json");
                     
+                    // 7. SAVE THE KEY (AppData)
+                    let auth_path = get_auth_file_path(&app)?;
                     let auth_data = serde_json::json!({ "apikey": api_key });
-                    fs::write(auth_path, serde_json::to_string_pretty(&auth_data).unwrap()).map_err(|e| e.to_string())?;
                     
+                    fs::write(&auth_path, serde_json::to_string_pretty(&auth_data).unwrap())
+                        .map_err(|e| format!("Failed to save auth file: {}", e))?;
+                    
+                    println!("API Key saved to: {:?}", auth_path);
                     return Ok(api_key.to_string());
                 }
             }
@@ -1575,13 +1587,12 @@ async fn login_to_nexus() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn logout_nexus() -> Result<(), String> {
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let auth_path = exe_dir.join("auth.json");
+fn logout_nexus(app: tauri::AppHandle) -> Result<(), String> {
+    let auth_path = get_auth_file_path(&app)?;
     
     if auth_path.exists() {
         fs::remove_file(auth_path).map_err(|e| e.to_string())?;
+        println!("Logged out. Auth file deleted.");
     }
     Ok(())
 }
