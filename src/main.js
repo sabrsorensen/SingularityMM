@@ -146,7 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const genericDialogMessage = document.getElementById('genericDialogMessage');
     const genericDialogActions = document.getElementById('genericDialogActions');
 
-    function showDialog(title, message, type = 'alert') {
+    // CHANGE 1: Added confirmText and cancelText arguments
+    function showDialog(title, message, type = 'alert', confirmText = 'OK', cancelText = 'Cancel') {
         return new Promise((resolve) => {
             genericDialogTitle.textContent = title || 'Singularity';
             genericDialogMessage.textContent = message;
@@ -155,7 +156,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (type === 'confirm') {
                 const btnCancel = document.createElement('button');
                 btnCancel.className = 'modal-gen-btn-cancel';
-                btnCancel.textContent = 'Cancel';
+
+                // CHANGE 2: Use variable instead of string 'Cancel'
+                btnCancel.textContent = cancelText;
+
+                // CHANGE 3: Auto-expand width if text is long (like "Don't Show Again")
+                if (cancelText.length > 8) {
+                    btnCancel.style.width = 'auto';
+                    btnCancel.style.paddingLeft = '15px';
+                    btnCancel.style.paddingRight = '15px';
+                }
+
                 btnCancel.onclick = () => {
                     genericDialogModal.classList.add('hidden');
                     resolve(false);
@@ -164,7 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const btnOk = document.createElement('button');
                 btnOk.className = 'modal-gen-btn-confirm';
-                btnOk.textContent = 'OK';
+
+                // CHANGE 4: Use variable instead of string 'OK'
+                btnOk.textContent = confirmText;
+
                 btnOk.onclick = () => {
                     genericDialogModal.classList.add('hidden');
                     resolve(true);
@@ -189,8 +203,26 @@ document.addEventListener('DOMContentLoaded', () => {
         await showDialog(title, msg, 'alert');
     };
 
-    window.customConfirm = async (msg, title) => {
-        return await showDialog(title, msg, 'confirm');
+    // CHANGE 5: Update wrapper to pass the new arguments
+    window.customConfirm = async (msg, title, confirmBtnText = 'OK', cancelBtnText = 'Cancel') => {
+        return await showDialog(title, msg, 'confirm', confirmBtnText, cancelBtnText);
+    };
+
+    window.customAlert = async (msg, title) => {
+        await showDialog(title, msg, 'alert');
+    };
+
+    // Updated to accept custom button text
+    window.customConfirm = async (msg, title, confirmBtnText = 'OK', cancelBtnText = 'Cancel') => {
+        return await showDialog(title, msg, 'confirm', confirmBtnText, cancelBtnText);
+    };
+
+    window.customAlert = async (msg, title) => {
+        await showDialog(title, msg, 'alert');
+    };
+
+    window.customConfirm = async (msg, title, confirmBtnText = 'OK', cancelBtnText = 'Cancel') => {
+        return await showDialog(title, msg, 'confirm', confirmBtnText, cancelBtnText);
     };
 
     const i18n = {
@@ -394,13 +426,26 @@ document.addEventListener('DOMContentLoaded', () => {
         gridGapValue.textContent = `${savedGridGap}px`;
 
         // Check for untracked/manual mods
-        const hasUntracked = await invoke('check_for_untracked_mods');
+        const suppressWarning = localStorage.getItem('suppressUntrackedWarning') === 'true';
 
-        if (hasUntracked) {
-            await window.customAlert(
-                "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThe 'Default' profile has been created, but it CANNOT restore these manual mods if you switch profiles.\n\nTo fix this, please delete them and reinstall them by dragging their .zip files into the Manager.",
-                "Warning"
-            );
+        if (!suppressWarning) {
+            const hasUntracked = await invoke('check_for_untracked_mods');
+
+            if (hasUntracked) {
+                // TRUE = "OK" (Acknowledged, keep showing)
+                // FALSE = "Don't Show Again" (Suppress future warnings)
+                const keepShowing = await window.customConfirm(
+                    "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThese files are NOT tracked by the Profile system. If you switch profiles, these files might be deleted or cause conflicts.\n\nTo fix this, delete them from the folder and reinstall them by dragging their .zip files into the Manager.",
+                    "Warning",
+                    "OK",
+                    "Don't Show Again"
+                );
+
+                // If they clicked "Don't Show Again" (which returns false), save the preference
+                if (keepShowing === false) {
+                    localStorage.setItem('suppressUntrackedWarning', 'true');
+                }
+            }
         }
 
         // 1. Ensure Default Profile Exists
@@ -3012,6 +3057,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.log("User cancelled 'Delete All' operation.");
         }
+    });
+
+    document.getElementById('resetWarningsBtn').addEventListener('click', async () => {
+        localStorage.removeItem('suppressUntrackedWarning');
+        await window.customAlert("Hidden warnings have been reset and will appear again if issues are detected.", "Reset Complete");
     });
 
     nxmHandlerBtn.addEventListener('click', async () => {

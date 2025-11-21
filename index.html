@@ -263,7 +263,7 @@
                             style="width: 100px; font-size: 12px; padding: 5px;">Connect</button>
                     </div>
                 </div>
-                <!-- 2. List Density Setting -->
+                <!-- List Density Setting -->
                 <div class="setting-row settings-grid-row">
                     <label for="rowPaddingSlider" data-i18n="listDensityLabel">List Density</label>
                     <div class="slider-container">
@@ -279,14 +279,20 @@
                         <span id="gridGapValue" class="slider-value">10px</span>
                     </div>
                 </div>
-                <!-- 4. NXM Handler Section -->
+                <!-- Reset Warnings Button -->
+                <div class="setting-row">
+                    <label>Warnings</label>
+                    <button id="resetWarningsBtn" class="modal-btn-delete" style="width: auto; padding: 5px 10px;">Reset
+                        Hidden Warnings</button>
+                </div>
+                <!-- NXM Handler Section -->
                 <div class="troubleshoot-section">
                     <h3>MOD MANAGER DOWNLOADS</h3>
                     <p>Set Singularity as the default application for (nxm://) links.</p>
                     <button id="nxmHandlerBtn" class="modal-btn-nxm-confirm">Set as Default Handler</button>
                     <p id="nxmHandlerStatus" class="handler-status hidden"></p>
                 </div>
-                <!-- 3. Troubleshoot Section -->
+                <!-- Troubleshoot Section -->
                 <div class="troubleshoot-section">
                     <h3 data-i18n="troubleshootModalTitle">TROUBLESHOOT</h3>
                     <p data-i18n="troubleshootModalDesc">This will DELETE the GCMODSETTINGS file, forcing the game to
