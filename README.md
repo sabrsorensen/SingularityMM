@@ -1,4 +1,4 @@
-# NMS Mod Manager
+# Singularity
 
 A lightweight Windows-based Mod manager for No Man's Sky built with Tauri v2 that started as a curiosity.
 
