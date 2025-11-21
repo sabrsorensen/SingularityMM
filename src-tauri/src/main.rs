@@ -351,6 +351,10 @@ fn extract_archive_to_temp(archive_path: &Path, mods_path: &Path) -> Result<Path
                 })?;
             }
         }
+        "7z" => {
+            sevenz_rust::decompress_file(archive_path, &temp_extract_path)
+                .map_err(|e| format!("Failed to extract 7z archive: {}", e))?;
+        }
         _ => return Err(format!("Unsupported file type: .{}", extension)),
     }
     Ok(temp_extract_path)
