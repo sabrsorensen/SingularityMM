@@ -1499,22 +1499,18 @@ button.context-menu-item.delete:hover {
 
 .mod-card-stats {
     display: flex;
-    gap: 20px;
-    font-size: 10pt;
-    opacity: 0.8;
     margin-top: auto;
+    font-size: 10pt;
+    font-style: italic;
+    color: var(--c-text-primary);
+    opacity: 0.5;
 }
 
-.mod-card-stats span {
+/* .mod-card-stats span {
     display: flex;
     align-items: center;
     gap: 5px;
-}
-
-.mod-card-stats img {
-    height: 12px;
-    opacity: 0.6;
-}
+} */
 
 .mod-card-meta {
     display: flex;

@@ -171,7 +171,7 @@
                         <!-- Sort Dropdown -->
                         <select id="browseSortSelect" class="themed-input styled-select">
                             <option value="last_updated" selected>Sort by: Last Updated</option>
-                            <option value="endorsements">Sort by: Endorsements</option>
+                            <option value="name_asc">Sort by: Name (A-Z)</option>
                         </select>
                     </div>
                     <div id="browseGridContainer" class="browse-grid">
@@ -210,14 +210,6 @@
                                     <div class="meta-line">
                                         <span class="meta-label">Updated</span>
                                         <span id="modDetailUpdated" class="meta-value"></span>
-                                    </div>
-                                    <div class="meta-line">
-                                        <span class="meta-label">Downloads</span>
-                                        <span id="modDetailDownloads" class="meta-value"></span>
-                                    </div>
-                                    <div class="meta-line">
-                                        <span class="meta-label">Endorsements</span>
-                                        <span id="modDetailEndorsements" class="meta-value"></span>
                                     </div>
                                 </div>
                                 <!-- 3. Secondary actions container (at the bottom) -->
@@ -354,9 +346,7 @@
                     <p class="mod-card-author">by Author</p>
                     <p class="mod-card-summary">Mod summary will go here...</p>
                     <div class="mod-card-stats">
-                        <span><img src="/src/assets/icon-download.png"> <span class="mod-card-downloads">0</span></span>
-                        <span><img src="/src/assets/icon-endorse.png"> <span
-                                class="mod-card-endorsements">0</span></span>
+                        <span class="mod-card-date">Updated: --/--/----</span>
                     </div>
                 </div>
             </div>

@@ -1666,13 +1666,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterAndDisplayMods() {
         const searchTerm = browseSearchInput.value.toLowerCase();
         const filterBy = browseFilterSelect.value;
-        const sortBy = browseSortSelect.value;
+        const sortBy = browseSortSelect.value; // Get the selected sort option
 
         let processedMods = [...curatedData];
 
         // --- STAGE 1: FILTERING ---
-
-        // 1a. Filter by Search Term
         if (searchTerm) {
             processedMods = processedMods.filter(modData => {
                 if (!modData) return false;
@@ -1684,7 +1682,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // 1b. Filter by Installation Status
         if (filterBy === 'installed') {
             processedMods = processedMods.filter(mod => appState.installedModsMap.has(String(mod.mod_id)));
         } else if (filterBy === 'uninstalled') {
@@ -1692,10 +1689,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- STAGE 2: SORTING ---
-        // Now, sort the already filtered list.
-        if (sortBy === 'endorsements') {
-            processedMods.sort((a, b) => (b.endorsement_count || 0) - (a.endorsement_count || 0));
-        } else { // Default sort is 'last_updated'
+        if (sortBy === 'name_asc') {
+            // Sort Alphabetically (A to Z) ignoring case
+            processedMods.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        } else {
+            // Default: Last Updated (Newest First)
             processedMods.sort((a, b) => (b.updated_timestamp || 0) - (a.updated_timestamp || 0));
         }
 
@@ -1742,8 +1740,9 @@ document.addEventListener('DOMContentLoaded', () => {
             titleElement.innerHTML = titleHtml;
             card.querySelector('.mod-card-summary').textContent = modData.summary || 'No summary available.';
             card.querySelector('.mod-card-author').textContent = `by ${modData.author}`;
-            card.querySelector('.mod-card-downloads').textContent = new Intl.NumberFormat().format(modData.mod_downloads);
-            card.querySelector('.mod-card-endorsements').textContent = new Intl.NumberFormat().format(modData.endorsement_count);
+            const currentLang = mapLangCode(languageSelector.value);
+            const dateStr = formatNexusDate(modData.updated_timestamp, currentLang);
+            card.querySelector('.mod-card-date').textContent = `Updated: ${dateStr}`;
 
             browseGridContainer.appendChild(card);
         }
@@ -1756,8 +1755,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modDetailDescription.innerHTML = bbcodeToHtml(modData.description) || '<p>No description available.</p>';
         modDetailAuthor.textContent = modData.author || 'Unknown';
         modDetailVersion.textContent = modData.version || '?.?';
-        modDetailDownloads.textContent = new Intl.NumberFormat().format(modData.mod_downloads);
-        modDetailEndorsements.textContent = new Intl.NumberFormat().format(modData.endorsement_count);
 
         const currentLang = mapLangCode(languageSelector.value);
         modDetailUpdated.textContent = formatNexusDate(modData.updated_timestamp, currentLang);
