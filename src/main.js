@@ -36,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentFilePath: null,
         activeProfile: 'Default',
         selectedProfileView: 'Default',
+        currentPage: 1,
+        modsPerPage: 20,
         isProfileSwitching: false,
         xmlDoc: null,
         isPopulating: false,
@@ -117,8 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modDetailImage = document.getElementById('modDetailImage'),
         modDetailVersion = document.getElementById('modDetailVersion'),
         modDetailUpdated = document.getElementById('modDetailUpdated'),
-        modDetailDownloads = document.getElementById('modDetailDownloads'),
-        modDetailEndorsements = document.getElementById('modDetailEndorsements'),
         modDetailDescription = document.getElementById('modDetailDescription'),
         modDetailInstallBtnContainer = document.getElementById('modDetailInstallBtnContainer'),
         modDetailSecondaryActions = document.getElementById('modDetailSecondaryActions'),
@@ -454,6 +454,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.style.setProperty('--browse-grid-gap', `${savedGridGap}px`);
         gridGapSlider.value = savedGridGap;
         gridGapValue.textContent = `${savedGridGap}px`;
+
+        const savedModsPerPage = localStorage.getItem('modsPerPage') || '20';
+        appState.modsPerPage = parseInt(savedModsPerPage, 10);
+
+        const modsPerPageSlider = document.getElementById('modsPerPageSlider');
+        const modsPerPageValue = document.getElementById('modsPerPageValue');
+        if (modsPerPageSlider) {
+            modsPerPageSlider.value = appState.modsPerPage;
+            modsPerPageValue.textContent = appState.modsPerPage;
+        }
 
         // Check for untracked/manual mods
         const suppressWarning = localStorage.getItem('suppressUntrackedWarning') === 'true';
@@ -1731,7 +1741,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterAndDisplayMods() {
         const searchTerm = browseSearchInput.value.toLowerCase();
         const filterBy = browseFilterSelect.value;
-        const sortBy = browseSortSelect.value; // Get the selected sort option
+        const sortBy = browseSortSelect.value;
 
         let processedMods = [...curatedData];
 
@@ -1755,17 +1765,118 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- STAGE 2: SORTING ---
         if (sortBy === 'name_asc') {
-            // Sort Alphabetically (A to Z) ignoring case
             processedMods.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
         } else {
-            // Default: Last Updated (Newest First)
             processedMods.sort((a, b) => (b.updated_timestamp || 0) - (a.updated_timestamp || 0));
         }
 
-        // --- STAGE 3: DISPLAY ---
-        displayMods(processedMods);
+        // --- STAGE 3: PAGINATION ---
+        const totalItems = processedMods.length;
+        const totalPages = Math.ceil(totalItems / appState.modsPerPage);
+
+        // Safety check: If it filtered and current page is now out of bounds, reset to 1
+        if (appState.currentPage > totalPages) appState.currentPage = 1;
+        if (appState.currentPage < 1) appState.currentPage = 1;
+
+        const startIndex = (appState.currentPage - 1) * appState.modsPerPage;
+        const endIndex = startIndex + appState.modsPerPage;
+
+        const modsForCurrentPage = processedMods.slice(startIndex, endIndex);
+
+        // --- STAGE 4: DISPLAY ---
+        displayMods(modsForCurrentPage);
+
+        // Update the pagination UI
+        renderPaginationControls(totalPages, appState.currentPage);
     }
 
+    const paginationContainer = document.getElementById('paginationContainer');
+
+    function renderPaginationControls(totalPages, currentPage) {
+        paginationContainer.innerHTML = '';
+
+        // Hide if only 1 page or no items
+        if (totalPages <= 1) {
+            paginationContainer.classList.add('hidden');
+            return;
+        }
+        paginationContainer.classList.remove('hidden');
+
+        const createButton = (text, page, isActive = false, isDisabled = false) => {
+            const btn = document.createElement('div');
+            btn.className = `page-btn ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+            btn.textContent = text;
+            if (!isDisabled && !isActive) {
+                btn.onclick = () => {
+                    appState.currentPage = page;
+                    filterAndDisplayMods();
+                    browseGridContainer.scrollTop = 0;
+                };
+            }
+            return btn;
+        };
+
+        const createDots = () => {
+            const dots = document.createElement('span');
+            dots.className = 'page-dots';
+            dots.textContent = '...';
+            return dots;
+        };
+
+        // --- PREVIOUS ARROW ---
+        paginationContainer.appendChild(createButton('<', currentPage - 1, false, currentPage === 1));
+
+        // --- STABLE PAGINATION LOGIC ---
+        // This logic ensures we almost always render the same number of elements 
+        // so the UI doesn't jitter left/right when clicking next.
+
+        const MAX_VISIBLE_PAGES = 7; // Threshold to switch to complex view
+
+        if (totalPages <= MAX_VISIBLE_PAGES) {
+            // Case 1: Few pages (e.g. 1 2 3 4 5). Show all.
+            for (let i = 1; i <= totalPages; i++) {
+                paginationContainer.appendChild(createButton(i, i, i === currentPage));
+            }
+        } else {
+            // Case 2: Many pages. We use a sliding window to keep exactly 7 items visible.
+            // The 3 layouts are:
+            // Start:  [1] [2] [3] [4] [5] [...] [100]
+            // Middle: [1] [...] [49] [50] [51] [...] [100]
+            // End:    [1] [...] [96] [97] [98] [99] [100]
+
+            if (currentPage <= 4) {
+                // Near Start
+                for (let i = 1; i <= 5; i++) {
+                    paginationContainer.appendChild(createButton(i, i, i === currentPage));
+                }
+                paginationContainer.appendChild(createDots());
+                paginationContainer.appendChild(createButton(totalPages, totalPages, totalPages === currentPage));
+
+            } else if (currentPage >= totalPages - 3) {
+                // Near End
+                paginationContainer.appendChild(createButton(1, 1, 1 === currentPage));
+                paginationContainer.appendChild(createDots());
+                for (let i = totalPages - 4; i <= totalPages; i++) {
+                    paginationContainer.appendChild(createButton(i, i, i === currentPage));
+                }
+
+            } else {
+                // Middle
+                paginationContainer.appendChild(createButton(1, 1, 1 === currentPage));
+                paginationContainer.appendChild(createDots());
+
+                paginationContainer.appendChild(createButton(currentPage - 1, currentPage - 1));
+                paginationContainer.appendChild(createButton(currentPage, currentPage, true));
+                paginationContainer.appendChild(createButton(currentPage + 1, currentPage + 1));
+
+                paginationContainer.appendChild(createDots());
+                paginationContainer.appendChild(createButton(totalPages, totalPages, totalPages === currentPage));
+            }
+        }
+
+        // --- NEXT ARROW ---
+        paginationContainer.appendChild(createButton('>', currentPage + 1, false, currentPage === totalPages));
+    }
     function displayMods(modsToDisplay) {
         browseGridContainer.innerHTML = '';
         const template = document.getElementById('modCardTemplate');
@@ -3081,9 +3192,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    browseSortSelect.addEventListener('change', filterAndDisplayMods);
-    browseFilterSelect.addEventListener('change', filterAndDisplayMods);
-    browseSearchInput.addEventListener('input', filterAndDisplayMods);
+    browseSortSelect.addEventListener('input', () => {
+        appState.currentPage = 1; // <--- Reset page
+        filterAndDisplayMods();
+    });
+    browseFilterSelect.addEventListener('input', () => {
+        appState.currentPage = 1; // <--- Reset page
+        filterAndDisplayMods();
+    });
+    browseSearchInput.addEventListener('input', () => {
+        appState.currentPage = 1; // <--- Reset page
+        filterAndDisplayMods();
+    });
 
     downloadHistoryBtn.addEventListener('click', async () => {
         if (appState.activeProfile) {
@@ -3291,6 +3411,23 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             nexusAuthBtn.disabled = false;
         }
+    });
+
+    const modsPerPageSlider = document.getElementById('modsPerPageSlider');
+    const modsPerPageValue = document.getElementById('modsPerPageValue');
+
+    modsPerPageSlider.addEventListener('input', () => {
+        modsPerPageValue.textContent = modsPerPageSlider.value;
+    });
+
+    modsPerPageSlider.addEventListener('change', () => {
+        const newValue = parseInt(modsPerPageSlider.value, 10);
+        appState.modsPerPage = newValue;
+        localStorage.setItem('modsPerPage', newValue);
+
+        // Reset to page 1 and refresh grid if currently viewing it
+        appState.currentPage = 1;
+        filterAndDisplayMods();
     });
 
     (async () => {

@@ -2591,3 +2591,65 @@ button.context-menu-item.delete:hover {
     font-style: normal;
     font-weight: bold;
 }
+
+/* ==========================================================================
+   12. Pagination Styling
+   ========================================================================== */
+
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    padding: 10px;
+    margin-top: auto;
+    /* Pushes it to the bottom if grid is empty */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+}
+
+.page-btn {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--c-text-primary);
+    font-family: var(--font-secondary);
+    font-size: 14px;
+    min-width: 35px;
+    height: 35px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-btn:hover:not(.disabled):not(.active) {
+    background-color: var(--c-accent-primary);
+    border-color: var(--c-accent-primary);
+    color: white;
+}
+
+.page-btn.active {
+    background-color: var(--c-accent-primary);
+    border-color: var(--c-accent-primary);
+    font-weight: bold;
+    color: white;
+    cursor: default;
+}
+
+.page-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.page-dots {
+    color: var(--c-text-primary);
+    opacity: 0.5;
+    min-width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
