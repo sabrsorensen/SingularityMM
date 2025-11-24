@@ -29,6 +29,7 @@ use uuid::Uuid;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use futures_util::{StreamExt, SinkExt};
 use url::Url;
+use tauri::path::BaseDirectory;
 
 // --- STRUCTS ---
 
@@ -168,6 +169,11 @@ struct ProfileSwitchProgress {
     current_mod: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct GlobalAppConfig {
+    custom_download_path: Option<String>,
+}
+
 const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <Data template="GcModSettings">
   <Property name="DisableAllMods" value="false" />
@@ -176,6 +182,54 @@ const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </Data>"#;
 
 // --- HELPER FUNCTIONS ---
+fn get_singularity_root(app: &AppHandle) -> Result<PathBuf, String> {
+    // This creates/finds: %APPDATA%/Singularity
+    // We use data_dir() which usually points to Roaming, then join "Singularity"
+    let path = app.path().resolve("Singularity", BaseDirectory::Data)
+        .map_err(|e| e.to_string())?;
+    
+    if !path.exists() {
+        fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(path)
+}
+
+fn get_config_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    // Keeps config in the standard Tauri app data: %APPDATA%/com.syzzle.singularity/config.json
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    if !app_data.exists() {
+        fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
+    }
+    Ok(app_data.join("config.json"))
+}
+
+fn get_downloads_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    // 1. Check if user has a custom path in config.json
+    if let Ok(config_path) = get_config_file_path(app) {
+        if config_path.exists() {
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                if let Ok(config) = serde_json::from_str::<GlobalAppConfig>(&content) {
+                    if let Some(custom_path) = config.custom_download_path {
+                        let path = PathBuf::from(custom_path);
+                        if !path.exists() {
+                            fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+                        }
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to default: %APPDATA%/Singularity/downloads
+    let root = get_singularity_root(app)?;
+    let downloads = root.join("downloads");
+    if !downloads.exists() {
+        fs::create_dir_all(&downloads).map_err(|e| e.to_string())?;
+    }
+    Ok(downloads)
+}
+
 fn calculate_file_hash(path: &Path) -> Result<String, String> {
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
@@ -200,12 +254,14 @@ fn read_mod_info(mod_path: &Path) -> Option<ModInfo> {
         .and_then(|content| serde_json::from_str(&content).ok())
 }
 
-fn get_state_file_path() -> PathBuf {
-    let exe_path = env::current_exe().expect("Failed to find executable path");
-    let exe_dir = exe_path
-        .parent()
-        .expect("Failed to get parent directory of executable");
-    exe_dir.join("window-state.json")
+fn get_state_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    
+    if !app_data_dir.exists() {
+        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(app_data_dir.join("window-state.json"))
 }
 
 fn find_game_path() -> Option<PathBuf> {
@@ -435,11 +491,9 @@ fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
 }
 
 #[tauri::command]
-fn install_mod_from_archive(archive_path_str: String) -> Result<InstallationAnalysis, String> {
+fn install_mod_from_archive(app: AppHandle, archive_path_str: String) -> Result<InstallationAnalysis, String> {
     let mut archive_path = PathBuf::from(&archive_path_str);
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let downloads_dir = exe_dir.join("downloads");
+    let downloads_dir = get_downloads_dir(&app)?;
     
     // Ensure downloads directory exists
     if !downloads_dir.exists() {
@@ -1117,12 +1171,8 @@ fn register_nxm_protocol() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn download_mod_archive(download_url: String, file_name: String) -> Result<DownloadResult, String> {
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or_else(|| "Could not get parent directory of executable.".to_string())?;
-    
-    let downloads_path = exe_dir.join("downloads");
-    fs::create_dir_all(&downloads_path).map_err(|e| format!("Failed to create downloads directory: {}", e))?;
+async fn download_mod_archive(app: AppHandle, download_url: String, file_name: String) -> Result<DownloadResult, String> {
+    let downloads_path = get_downloads_dir(&app)?;
     let final_archive_path = downloads_path.join(&file_name);
 
     let response = reqwest::get(&download_url)
@@ -1177,10 +1227,8 @@ fn delete_archive_file(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn clear_downloads_folder() -> Result<(), String> {
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or_else(|| "Could not get parent directory of executable.".to_string())?;
-    let downloads_path = exe_dir.join("downloads");
+fn clear_downloads_folder(app: AppHandle) -> Result<(), String> {
+    let downloads_path = get_downloads_dir(&app)?;
 
     if downloads_path.exists() {
         // Read all entries in the directory
@@ -1232,19 +1280,18 @@ fn get_auth_file_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 // --- PROFILE MANAGEMENT ---
 
-fn get_profiles_dir() -> Result<PathBuf, String> {
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let profiles_dir = exe_dir.join("profiles");
-    if !profiles_dir.exists() {
-        fs::create_dir_all(&profiles_dir).map_err(|e| e.to_string())?;
+fn get_profiles_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let root = get_singularity_root(app)?;
+    let profiles = root.join("profiles");
+    if !profiles.exists() {
+        fs::create_dir_all(&profiles).map_err(|e| e.to_string())?;
     }
-    Ok(profiles_dir)
+    Ok(profiles)
 }
 
 #[tauri::command]
-fn list_profiles() -> Result<Vec<String>, String> {
-    let dir = get_profiles_dir()?;
+fn list_profiles(app: AppHandle) -> Result<Vec<String>, String> {
+    let dir = get_profiles_dir(&app)?;
     let mut profiles = Vec::new();
     
     // 1. Always ensure "Default" is first in the list
@@ -1269,14 +1316,12 @@ fn list_profiles() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn save_active_profile(profile_name: String, mods: Vec<ProfileSaveRequest>) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+fn save_active_profile(app: AppHandle, profile_name: String, mods: Vec<ProfileSaveRequest>) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let json_path = dir.join(format!("{}.json", profile_name));
     let mxml_backup_path = dir.join(format!("{}.mxml", profile_name));
     
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let downloads_dir = exe_dir.join("downloads");
+    let downloads_dir = get_downloads_dir(&app)?;
 
     let mut profile_entries = Vec::new();
 
@@ -1315,8 +1360,8 @@ fn save_active_profile(profile_name: String, mods: Vec<ProfileSaveRequest>) -> R
 }
 
 #[tauri::command]
-async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let json_path = dir.join(format!("{}.json", profile_name));
     let mxml_backup_path = dir.join(format!("{}.mxml", profile_name));
 
@@ -1350,9 +1395,7 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
         fs::write(&live_mxml, CLEAN_MXML_TEMPLATE).map_err(|e| e.to_string())?;
     }
 
-    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
-    let exe_dir = exe_path.parent().ok_or("No parent dir")?;
-    let downloads_dir = exe_dir.join("downloads");
+    let downloads_dir = get_downloads_dir(&app)?;
 
     let total_mods = profile_data.mods.len();
     
@@ -1399,8 +1442,8 @@ async fn apply_profile(app: tauri::AppHandle, profile_name: String) -> Result<()
 }
 
 #[tauri::command]
-fn delete_profile(profile_name: String) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+fn delete_profile(app: AppHandle, profile_name: String) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let json_path = dir.join(format!("{}.json", profile_name));
     let mxml_path = dir.join(format!("{}.mxml", profile_name));
     if json_path.exists() { fs::remove_file(json_path).map_err(|e| e.to_string())?; }
@@ -1409,8 +1452,8 @@ fn delete_profile(profile_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn rename_profile(old_name: String, new_name: String) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+fn rename_profile(app: AppHandle, old_name: String, new_name: String) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let old_json = dir.join(format!("{}.json", old_name));
     let old_mxml = dir.join(format!("{}.mxml", old_name));
     let new_json = dir.join(format!("{}.json", new_name));
@@ -1422,8 +1465,8 @@ fn rename_profile(old_name: String, new_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn create_empty_profile(profile_name: String) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+fn create_empty_profile(app: AppHandle, profile_name: String) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let json_path = dir.join(format!("{}.json", profile_name));
     let mxml_path = dir.join(format!("{}.mxml", profile_name));
 
@@ -1468,8 +1511,8 @@ fn check_for_untracked_mods() -> bool {
 }
 
 #[tauri::command]
-fn get_profile_mod_list(profile_name: String) -> Result<Vec<String>, String> {
-    let dir = get_profiles_dir()?;
+fn get_profile_mod_list(app: AppHandle, profile_name: String) -> Result<Vec<String>, String> {
+    let dir = get_profiles_dir(&app)?;
     let json_path = dir.join(format!("{}.json", profile_name));
     
     if !json_path.exists() {
@@ -1486,8 +1529,8 @@ fn get_profile_mod_list(profile_name: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn copy_profile(source_name: String, new_name: String) -> Result<(), String> {
-    let dir = get_profiles_dir()?;
+fn copy_profile(app: AppHandle, source_name: String, new_name: String) -> Result<(), String> {
+    let dir = get_profiles_dir(&app)?;
     let source_json = dir.join(format!("{}.json", source_name));
     let source_mxml = dir.join(format!("{}.mxml", source_name));
     
@@ -1601,6 +1644,52 @@ fn logout_nexus(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_folder_path(path: String) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    if p.exists() {
+        open::that(p).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Folder does not exist".to_string())
+    }
+}
+
+#[tauri::command]
+fn get_downloads_path(app: AppHandle) -> Result<String, String> {
+    let path = get_downloads_dir(&app)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn set_downloads_path(app: AppHandle, new_path: String) -> Result<(), String> {
+    let config_path = get_config_file_path(&app)?;
+    
+    // Validate path exists
+    if !Path::new(&new_path).exists() {
+        return Err("The selected path does not exist.".to_string());
+    }
+
+    let config = GlobalAppConfig {
+        custom_download_path: Some(new_path),
+    };
+
+    let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    fs::write(config_path, json).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn open_special_folder(app: AppHandle, folder_type: String) -> Result<(), String> {
+    let path = match folder_type.as_str() {
+        "downloads" => get_downloads_dir(&app)?,
+        "profiles" => get_profiles_dir(&app)?,
+        _ => return Err("Unknown folder type".to_string()),
+    };
+    open::that(path).map_err(|e| e.to_string())
+}
+
 // --- MAIN FUNCTION ---
 fn main() {    
     tauri::Builder::default()
@@ -1631,18 +1720,23 @@ fn main() {
             }
 
             let window = app.get_webview_window("main").unwrap();
-            let state_file_path = get_state_file_path();
-            if let Ok(state_json) = fs::read_to_string(state_file_path) {
-                if let Ok(state) = serde_json::from_str::<WindowState>(&state_json) {
-                    window
-                        .set_position(PhysicalPosition::new(state.x, state.y))
-                        .unwrap();
+            
+            // --- UPDATED STATE LOADING ---
+            if let Ok(state_path) = get_state_file_path(app_handle) {
+                if let Ok(state_json) = fs::read_to_string(state_path) {
+                    if let Ok(state) = serde_json::from_str::<WindowState>(&state_json) {
+                        window
+                            .set_position(PhysicalPosition::new(state.x, state.y))
+                            .unwrap();
 
-                    if state.maximized {
-                        window.maximize().unwrap();
+                        if state.maximized {
+                            window.maximize().unwrap();
+                        }
                     }
                 }
             }
+            // -----------------------------
+
             window.show().unwrap();
             Ok(())
         })
@@ -1651,29 +1745,37 @@ fn main() {
                 tauri::WindowEvent::Resized(_)
                 | tauri::WindowEvent::Moved(_)
                 | tauri::WindowEvent::CloseRequested { .. } => {
+                    // --- UPDATED STATE SAVING ---
+                    let app_handle = window.app_handle();
                     let is_maximized = window.is_maximized().unwrap_or(false);
 
                     if !is_maximized {
-                        let position = window.outer_position().unwrap();
-                        let state = WindowState {
-                            x: position.x,
-                            y: position.y,
-                            maximized: false,
-                        };
-                        if let Ok(state_json) = serde_json::to_string(&state) {
-                            fs::write(get_state_file_path(), state_json).ok();
+                        if let Ok(position) = window.outer_position() {
+                            let state = WindowState {
+                                x: position.x,
+                                y: position.y,
+                                maximized: false,
+                            };
+                            if let Ok(state_json) = serde_json::to_string(&state) {
+                                if let Ok(path) = get_state_file_path(app_handle) {
+                                    fs::write(path, state_json).ok();
+                                }
+                            }
                         }
                     } else {
-                        let state_file_path = get_state_file_path();
-                        if let Ok(state_json) = fs::read_to_string(&state_file_path) {
-                            if let Ok(mut state) = serde_json::from_str::<WindowState>(&state_json) {
-                                state.maximized = true;
-                                if let Ok(new_state_json) = serde_json::to_string(&state) {
-                                    fs::write(state_file_path, new_state_json).ok();
+                        // If maximized, we update the maximized bool but keep the old X/Y
+                        if let Ok(path) = get_state_file_path(app_handle) {
+                            if let Ok(state_json) = fs::read_to_string(&path) {
+                                if let Ok(mut state) = serde_json::from_str::<WindowState>(&state_json) {
+                                    state.maximized = true;
+                                    if let Ok(new_state_json) = serde_json::to_string(&state) {
+                                        fs::write(path, new_state_json).ok();
+                                    }
                                 }
                             }
                         }
                     }
+                    // -----------------------------
                 }
                 _ => {}
             }
@@ -1711,7 +1813,11 @@ fn main() {
             get_profile_mod_list,
             copy_profile,
             login_to_nexus,
-            logout_nexus
+            logout_nexus,
+            get_downloads_path,
+            set_downloads_path,
+            open_special_folder,
+            open_folder_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1178,6 +1178,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- DOWNLOAD PATH SETTINGS ---
+    const changeDownloadDirBtn = document.getElementById('changeDownloadDirBtn');
+    const currentDownloadPathEl = document.getElementById('currentDownloadPath');
+
+    async function updateDownloadPathUI() {
+        try {
+            const path = await invoke('get_downloads_path');
+            currentDownloadPathEl.textContent = path;
+        } catch (e) {
+            currentDownloadPathEl.textContent = "Error loading path";
+        }
+    }
+
+    changeDownloadDirBtn.addEventListener('click', async () => {
+        try {
+            // Open folder selection dialog
+            const selected = await open({
+                directory: true,
+                multiple: false,
+                title: "Select New Downloads Folder"
+            });
+
+            if (selected) {
+                await invoke('set_downloads_path', { newPath: selected });
+                await updateDownloadPathUI();
+                await window.customAlert(`Downloads location changed to:\n${selected}`, "Success");
+
+                // Refresh history in case the new folder has different files (optional, but good practice)
+                // But usually we just assume the user moved files or wants a fresh start
+            }
+        } catch (e) {
+            await window.customAlert("Failed to set path: " + e, "Error");
+        }
+    });
+
+    const openDownloadsFolderBtn = document.getElementById('openDownloadsFolderBtn');
+    openDownloadsFolderBtn.addEventListener('click', async () => {
+        try {
+            await invoke('open_special_folder', { folderType: 'downloads' });
+        } catch (e) {
+            console.error(e);
+        }
+    });
+
     async function loadDownloadHistory() {
         try {
             const dataDir = await appDataDir();
@@ -2443,6 +2487,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.getElementById('nxmHandlerStatus').classList.add('hidden');
         settingsModalOverlay.classList.remove('hidden');
+        updateDownloadPathUI();
     });
     closeSettingsModalBtn.addEventListener('click', () => settingsModalOverlay.classList.add('hidden'));
     settingsModalOverlay.addEventListener('click', (e) => {
@@ -2718,8 +2763,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- PROFILE MANAGER LOGIC ---
-
     const openProfileManagerBtn = document.getElementById('openProfileManagerBtn');
     const profileManagerModal = document.getElementById('profileManagerModal');
     const mpProfileList = document.getElementById('mpProfileList');
@@ -2771,6 +2814,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close Modal Logic
     const closeManager = () => profileManagerModal.classList.add('hidden');
     document.getElementById('mpCloseBtn').addEventListener('click', closeManager);
+
+    const mpOpenFolderBtn = document.getElementById('mpOpenFolderBtn');
+    mpOpenFolderBtn.addEventListener('click', async () => {
+        try {
+            await invoke('open_special_folder', { folderType: 'profiles' });
+        } catch (e) {
+            console.error(e);
+        }
+    });
 
     // --- MODAL ACTION BUTTONS ---
 

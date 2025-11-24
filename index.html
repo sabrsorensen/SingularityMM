@@ -288,6 +288,22 @@
                     <button id="resetWarningsBtn" class="modal-btn-delete" style="width: auto; padding: 5px 10px;">Reset
                         Hidden Warnings</button>
                 </div>
+                <!-- Download Location Setting -->
+                <div class="setting-row"
+                    style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                    <div style="display: flex; flex-direction: column; width: 100%;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label>Downloads Folder</label>
+                            <button id="changeDownloadDirBtn" class="modal-btn-confirm"
+                                style="width: auto; padding: 4px 10px;">Change</button>
+                        </div>
+                        <div id="currentDownloadPath"
+                            style="font-size: 11px; opacity: 0.6; word-break: break-all; font-family: monospace;">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
                 <!-- NXM Handler Section -->
                 <div class="troubleshoot-section">
                     <h3>MOD MANAGER DOWNLOADS</h3>
@@ -396,12 +412,15 @@
         <!-- === DOWNLOAD HISTORY MODAL === -->
         <div id="downloadHistoryModalOverlay" class="modal-overlay hidden">
             <div class="modal-content download-modal">
-                <h2 data-i18n="downloadHistoryTitle">DOWNLOADS</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 data-i18n="downloadHistoryTitle" style="margin: 0;">DOWNLOADS</h2>
+                    <button id="openDownloadsFolderBtn" class="download-folder-btn">OPEN DOWNLOADS FOLDER</button>
+                </div>
                 <div class="download-header-row">
                     <span class="header-name sortable" data-sort="name">Name</span>
                     <span class="header-status sortable" data-sort="status">Status</span>
-                    <span class="header-size sortable" data-sort="size">Size</span> <!-- ADD THIS -->
-                    <span class="header-date sortable" data-sort="date">Date</span> <!-- ADD THIS -->
+                    <span class="header-size sortable" data-sort="size">Size</span>
+                    <span class="header-date sortable" data-sort="date">Date</span>
                 </div>
                 <div id="downloadListContainer" class="download-list-container">
                     <!-- Download items will be injected here -->
@@ -455,6 +474,7 @@
                 </div>
 
                 <div class="mp-footer">
+                    <button id="mpOpenFolderBtn" class="mp-action-btn" style="margin-right: auto;">Open Folder</button>
                     <button id="mpSelectBtn" class="mp-action-btn">Select</button>
                     <button id="mpCloseBtn" class="mp-action-btn">Close</button>
                 </div>
