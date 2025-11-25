@@ -22,9 +22,12 @@
                 <img src="/src/assets/icon-update.png" alt="Check for Updates" />
                 <span class="button-text" data-i18n="updateCheckBtn">Check for Updates</span>
             </div>
-            <img src="/src/assets/icon-download-2.png" alt="Downloads" id="downloadHistoryBtn" title="Downloads" />
-            <img src="/src/assets/icon-troubleshoot.png" alt="Settings" id="settingsBtn" title="Settings" />
-            <img src="/src/assets/icon-close.png" alt="Close" id="customCloseBtn" title="Close" />
+            <img src="/src/assets/icon-download-2.png" alt="Downloads" id="downloadHistoryBtn" data-i18n-attr="title"
+                data-i18n="downloadsTooltip" title="Downloads" />
+            <img src="/src/assets/icon-troubleshoot.png" alt="Settings" id="settingsBtn" data-i18n-attr="title"
+                data-i18n="settingsTooltip" title="Settings" />
+            <img src="/src/assets/icon-close.png" alt="Close" id="customCloseBtn" data-i18n-attr="title"
+                data-i18n="closeTooltip" title="Close" />
         </div>
     </header>
     <div class="main-content">
@@ -119,21 +122,23 @@
                 <div class="footer-container">
                     <!-- LEFT COLUMN: PROFILES -->
                     <div class="footer-col left">
-                        <div class="profile-header">PROFILE</div>
+                        <div class="profile-header" data-i18n="profileHeader">PROFILE</div>
 
                         <div class="profile-select-row">
                             <select id="profileSelect" class="themed-input styled-select profile-dropdown">
                                 <!-- Options injected via JS -->
                             </select>
                             <!-- The "Apply" button, hidden by default -->
-                            <button id="applyProfileBtn" class="apply-btn hidden" title="Apply Profile Change"></button>
+                            <button id="applyProfileBtn" class="apply-btn hidden" data-i18n-attr="title"
+                                data-i18n="applyProfileTooltip" title="Apply Profile Change"></button>
                         </div>
 
                         <div class="profile-actions-grid">
-                            <button id="addProfileBtn" class="profile-btn">Add</button>
-                            <button id="renameProfileBtn" class="profile-btn">Rename</button>
-                            <button id="deleteProfileBtn" class="profile-btn">Delete</button>
-                            <button id="openProfileManagerBtn" class="profile-manage-btn">MANAGE PROFILES</button>
+                            <button id="addProfileBtn" class="profile-btn" data-i18n="addBtn">Add</button>
+                            <button id="renameProfileBtn" class="profile-btn" data-i18n="renameBtn">Rename</button>
+                            <button id="deleteProfileBtn" class="profile-btn" data-i18n="deleteBtn">Delete</button>
+                            <button id="openProfileManagerBtn" class="profile-manage-btn"
+                                data-i18n="manageProfilesBtn">MANAGE PROFILES</button>
                         </div>
                     </div>
                     <!-- CENTER COLUMN: DROP ZONE -->
@@ -149,7 +154,7 @@
                                 <img id="launchIcon" src="/src/assets/icon-steam.png" alt="Launch">
                                 <div class="launch-glow"></div>
                             </div>
-                            <span class="launch-text">Play NO MAN'S SKY</span>
+                            <span class="launch-text" data-i18n="playButton">Play NO MAN'S SKY</span>
                         </div>
                     </div>
                 </div>
@@ -251,11 +256,11 @@
                 </div>
                 <!-- Nexus Account Setting -->
                 <div class="setting-row">
-                    <label>Nexus Account</label>
+                    <label data-i18n="nexusAccountLabel">Nexus Account</label>
                     <div class="account-row-content">
-                        <span id="nexusAccountStatus" class="account-status-text">Not Logged In</span>
+                        <span id="nexusAccountStatus" class="account-status-text">Not Connected</span>
                         <button id="nexusAuthBtn" class="modal-btn-confirm"
-                            style="width: 100px; font-size: 12px; padding: 5px;">Connect</button>
+                            style="width: 100px; font-size: 12px; padding: 5px;" data-i18n="connectBtn">Connect</button>
                     </div>
                 </div>
                 <!-- List Density Setting -->
@@ -268,7 +273,7 @@
                 </div>
                 <!-- Grid Density Setting -->
                 <div class="setting-row settings-grid-row">
-                    <label for="gridGapSlider">Grid Density</label>
+                    <label for="gridGapSlider" data-i18n="gridDensityLabel">Grid Density</label>
                     <div class="slider-container">
                         <input type="range" id="gridGapSlider" min="0" max="20" value="10" step="1">
                         <span id="gridGapValue" class="slider-value">10px</span>
@@ -276,7 +281,7 @@
                 </div>
                 <!-- Mods Per Page Setting -->
                 <div class="setting-row settings-grid-row">
-                    <label for="modsPerPageSlider">Mods Per Page</label>
+                    <label for="modsPerPageSlider" data-i18n="modsPerPageLabel">Mods Per Page</label>
                     <div class="slider-container">
                         <input type="range" id="modsPerPageSlider" min="10" max="100" value="20" step="10">
                         <span id="modsPerPageValue" class="slider-value">20</span>
@@ -284,9 +289,9 @@
                 </div>
                 <!-- Reset Warnings Button -->
                 <div class="setting-row">
-                    <label>Warnings</label>
-                    <button id="resetWarningsBtn" class="modal-btn-delete" style="width: auto; padding: 5px 10px;">Reset
-                        Hidden Warnings</button>
+                    <label data-i18n="warningsLabel">Warnings</label>
+                    <button id="resetWarningsBtn" class="modal-btn-delete" style="width: auto; padding: 5px 10px;"
+                        data-i18n="resetWarningsBtn">Reset Hidden Warnings</button>
                 </div>
                 <!-- Download Location Setting -->
                 <div class="setting-row dl-path-row">
@@ -303,9 +308,11 @@
                 </div>
                 <!-- NXM Handler Section -->
                 <div class="troubleshoot-section">
-                    <h3>MOD MANAGER DOWNLOADS</h3>
-                    <p>Set Singularity as the default application for (nxm://) links.</p>
-                    <button id="nxmHandlerBtn" class="modal-btn-nxm-confirm">Set as Default Handler</button>
+                    <h3 data-i18n="modManagerDownloadsTitle">MOD MANAGER DOWNLOADS</h3>
+                    <p data-i18n="modManagerDownloadsDesc">Set Singularity as the default application for (nxm://)
+                        links.</p>
+                    <button id="nxmHandlerBtn" class="modal-btn-nxm-confirm" data-i18n="setHandlerBtn">Set as Default
+                        Handler</button>
                     <p id="nxmHandlerStatus" class="handler-status hidden"></p>
                 </div>
                 <!-- Troubleshoot Section -->
@@ -337,19 +344,19 @@
                     <!-- Changelog entries will be injected here by JavaScript -->
                 </div>
                 <div class="modal-actions">
-                    <button id="closeChangelogModalBtn" class="modal-btn-cancel">Close</button>
+                    <button id="closeChangelogModalBtn" class="modal-btn-cancel" data-i18n="closeBtn">Close</button>
                 </div>
             </div>
         </div>
         <!-- === PRIORITY CHANGE MODAL === -->
         <div id="priorityModalOverlay" class="modal-overlay hidden">
             <div class="modal-content priority-modal">
-                <h2 id="priorityModalTitle">Change Priority</h2>
+                <h2 id="priorityModalTitle" data-i18n="priorityModalTitle">Change Priority</h2>
                 <p id="priorityModalDescription"></p>
                 <input type="number" id="priorityInput" class="themed-input" min="0">
                 <div class="modal-actions">
-                    <button id="confirmPriorityBtn" class="modal-btn-confirm">OK</button>
-                    <button id="cancelPriorityBtn" class="modal-btn-cancel">Cancel</button>
+                    <button id="confirmPriorityBtn" class="modal-btn-confirm" data-i18n="okBtn">OK</button>
+                    <button id="cancelPriorityBtn" class="modal-btn-cancel" data-i18n="cancelBtn">Cancel</button>
                 </div>
             </div>
         </div>
@@ -422,25 +429,27 @@
                         data-i18n="openDownloadsFolderBtn">OPEN DOWNLOADS FOLDER</button>
                 </div>
                 <div class="download-header-row">
-                    <span class="header-name sortable" data-sort="name">Name</span>
-                    <span class="header-status sortable" data-sort="status">Status</span>
-                    <span class="header-size sortable" data-sort="size">Size</span>
-                    <span class="header-date sortable" data-sort="date">Date</span>
+                    <span class="header-name sortable" data-sort="name" data-i18n="headerName">Name</span>
+                    <span class="header-status sortable" data-sort="status" data-i18n="headerStatus">Status</span>
+                    <span class="header-size sortable" data-sort="size" data-i18n="headerSize">Size</span>
+                    <span class="header-date sortable" data-sort="date" data-i18n="headerDate">Date</span>
                 </div>
                 <div id="downloadListContainer" class="download-list-container">
                     <!-- Download items will be injected here -->
                 </div>
                 <div class="modal-actions">
-                    <button id="clearDownloadHistoryBtn" class="modal-btn-delete">Delete All Downloads</button>
-                    <button id="closeDownloadHistoryBtn" class="modal-btn-cancel">Close</button>
+                    <button id="clearDownloadHistoryBtn" class="modal-btn-delete"
+                        data-i18n="deleteAllDownloadsBtn">Delete All Downloads</button>
+                    <button id="closeDownloadHistoryBtn" class="modal-btn-cancel" data-i18n="closeBtn">Close</button>
                 </div>
             </div>
         </div>
         <!-- === PROFILE SWITCHING PROGRESS MODAL === -->
         <div id="profileProgressModal" class="modal-overlay higher hidden">
             <div class="modal-content" style="width: 450px; text-align: center;">
-                <h2 style="color: var(--c-accent-primary);">APPLYING PROFILE</h2>
-                <div id="profileProgressText" style="margin-bottom: 15px; font-size: 14px;">Preparing...</div>
+                <h2 style="color: var(--c-accent-primary);" data-i18n="applyingProfileTitle">APPLYING PROFILE</h2>
+                <div id="profileProgressText" style="margin-bottom: 15px; font-size: 14px;" data-i18n="preparingText">
+                    Preparing...</div>
 
                 <!-- Simple Progress Bar -->
                 <div
@@ -450,7 +459,8 @@
                     </div>
                 </div>
 
-                <p id="profileTimeEst" style="font-size: 11px; opacity: 0.7; margin-top: 10px;">Calculating time...</p>
+                <p id="profileTimeEst" style="font-size: 11px; opacity: 0.7; margin-top: 10px;"
+                    data-i18n="calculatingTimeText">Calculating time...</p>
             </div>
         </div>
         <!-- === PROFILE MANAGER MODAL === -->
@@ -458,7 +468,7 @@
             <div class="modal-content mp-modal">
                 <div class="mp-header">
                     <img src="/src/assets/icon-troubleshoot.png" style="height: 20px; opacity: 0.7;">
-                    <span>PROFILES</span>
+                    <span data-i18n="profileManagerTitle">PROFILES</span>
                 </div>
 
                 <div class="mp-body">
@@ -471,10 +481,10 @@
 
                     <!-- Right: Buttons -->
                     <div class="mp-buttons-col">
-                        <button id="mpCreateBtn" class="mp-btn">Add</button>
-                        <button id="mpCopyBtn" class="mp-btn">Copy</button>
-                        <button id="mpRenameBtn" class="mp-btn">Rename</button>
-                        <button id="mpRemoveBtn" class="mp-btn">Delete</button>
+                        <button id="mpCreateBtn" class="mp-btn" data-i18n="addBtn">Add</button>
+                        <button id="mpCopyBtn" class="mp-btn" data-i18n="copyBtn">Copy</button>
+                        <button id="mpRenameBtn" class="mp-btn" data-i18n="renameBtn">Rename</button>
+                        <button id="mpRemoveBtn" class="mp-btn" data-i18n="deleteBtn">Delete</button>
                     </div>
                 </div>
 

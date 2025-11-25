@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedProfileView: 'Default',
         currentPage: 1,
         modsPerPage: 20,
+        nexusUsername: null,
         isProfileSwitching: false,
         xmlDoc: null,
         isPopulating: false,
@@ -152,7 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const genericDialogActions = document.getElementById('genericDialogActions');
 
     // CHANGE 1: Added confirmText and cancelText arguments
-    function showDialog(title, message, type = 'alert', confirmText = 'OK', cancelText = 'Cancel') {
+    function showDialog(title, message, type = 'alert', confirmText = null, cancelText = null) {
+        const finalConfirmText = confirmText || i18n.get('okBtn');
+        const finalCancelText = cancelText || i18n.get('cancelBtn');
+
         return new Promise((resolve) => {
             genericDialogTitle.textContent = title || 'Singularity';
             genericDialogMessage.textContent = message;
@@ -163,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnCancel.className = 'modal-gen-btn-cancel';
 
                 // CHANGE 2: Use variable instead of string 'Cancel'
-                btnCancel.textContent = cancelText;
+                btnCancel.textContent = finalCancelText;
 
                 // CHANGE 3: Auto-expand width if text is long (like "Don't Show Again")
                 if (cancelText.length > 8) {
@@ -182,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnOk.className = 'modal-gen-btn-confirm';
 
                 // CHANGE 4: Use variable instead of string 'OK'
-                btnOk.textContent = confirmText;
+                btnOk.textContent = finalConfirmText;
 
                 btnOk.onclick = () => {
                     genericDialogModal.classList.add('hidden');
@@ -192,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const btnOk = document.createElement('button');
                 btnOk.className = 'modal-gen-btn-confirm';
-                btnOk.textContent = 'OK';
+                btnOk.textContent = i18n.get('okBtn');
                 btnOk.onclick = () => {
                     genericDialogModal.classList.add('hidden');
                     resolve(true);
@@ -233,13 +237,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const i18n = {
         async loadLanguage(lang) {
             try {
-                const resourcePath = await resolveResource(`locales/${lang}.json`);
-                const content = await readTextFile(resourcePath);
-                appState.currentTranslations = JSON.parse(content);
+                // 1. Always load English first to use as a "base"
+                const enPath = await resolveResource(`locales/en.json`);
+                const enContent = await readTextFile(enPath);
+                const enData = JSON.parse(enContent);
+
+                if (lang === 'en') {
+                    appState.currentTranslations = enData;
+                } else {
+                    // 2. Load the target language
+                    const resourcePath = await resolveResource(`locales/${lang}.json`);
+                    const content = await readTextFile(resourcePath);
+                    const targetData = JSON.parse(content);
+
+                    // 3. MERGE: Use English as the base, and overwrite with Target language
+                    // This ensures that any keys missing in 'targetData' will still exist from 'enData'
+                    appState.currentTranslations = { ...enData, ...targetData };
+                }
+
                 localStorage.setItem('selectedLanguage', lang);
                 this.updateUI();
             } catch (e) {
                 console.error(`Failed to load language file for ${lang}`, e);
+                // If the specific file fails entirely, fall back to full English
                 if (lang !== 'en') await this.loadLanguage('en');
             }
         },
@@ -256,6 +276,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
+            const nexusStatus = document.getElementById('nexusAccountStatus');
+            if (nexusStatus) {
+                if (appState.nexusUsername) {
+                    // If logged in, translate "Connected as {{name}}"
+                    nexusStatus.textContent = this.get('statusConnectedAs', { name: appState.nexusUsername });
+                } else {
+                    // If logged out, translate "Not Logged In"
+                    nexusStatus.textContent = this.get('statusNotLoggedIn');
+                }
+            }
             if (appState.currentFilePath) {
                 basename(appState.currentFilePath).then(fileNameWithExt => {
                     const fileNameWithoutExt = fileNameWithExt.slice(0, fileNameWithExt.lastIndexOf('.'));
@@ -407,10 +437,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 const userData = await response.json();
 
-                nexusAccountStatus.textContent = `Connected as: ${userData.name}`;
+                appState.nexusUsername = userData.name;
+
+                nexusAccountStatus.textContent = i18n.get('statusConnectedAs', { name: userData.name });
                 nexusAccountStatus.classList.add('logged-in');
 
-                nexusAuthBtn.textContent = "Disconnect";
+                nexusAuthBtn.textContent = i18n.get('disconnectBtn');
                 nexusAuthBtn.className = "modal-btn-delete";
                 nexusAuthBtn.style.width = "100px";
                 nexusAuthBtn.style.padding = "5px";
@@ -426,10 +458,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn("Login check:", e);
             }
 
-            nexusAccountStatus.textContent = "Not connected";
+            appState.nexusUsername = null;
+            nexusAccountStatus.textContent = i18n.get('statusNotLoggedIn');
             nexusAccountStatus.classList.remove('logged-in');
 
-            nexusAuthBtn.textContent = "Connect";
+            nexusAuthBtn.textContent = i18n.get('connectBtn');
             nexusAuthBtn.className = "modal-btn-confirm";
             nexusAuthBtn.style.width = "100px";
             nexusAuthBtn.style.padding = "5px";
@@ -478,10 +511,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 // TRUE = "OK" (Acknowledged, keep showing)
                 // FALSE = "Don't Show Again" (Suppress future warnings)
                 const keepShowing = await window.customConfirm(
-                    "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThese files are NOT tracked by the Profile system. If you switch profiles, these files might be deleted or cause conflicts.\n\nTo fix this, delete them from the folder and reinstall them by dragging their .zip files into the Manager.",
-                    "Warning",
-                    "OK",
-                    "Don't Show Again"
+                    i18n.get('untrackedModsMsg'),       // Message
+                    i18n.get('warningTitle'),           // Title
+                    i18n.get('okBtn'),                  // "OK" (Reuse existing key)
+                    i18n.get('dontShowAgainBtn')        // "Don't Show Again"
                 );
 
                 // If they clicked "Don't Show Again" (which returns false), save the preference
@@ -881,7 +914,7 @@ document.addEventListener('DOMContentLoaded', () => {
             version: version,
             displayName: displayName,
             fileName: fileName,
-            statusText: isUpdate ? 'Updating...' : 'Waiting to start...',
+            statusText: isUpdate ? i18n.get('statusUpdating') : i18n.get('statusWaiting'),
             statusClass: 'progress',
             archivePath: null,
             modFolderName: null,
@@ -960,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemData.statusClass === 'success' && itemData.archivePath) {
             console.log("[CONTEXT MENU] 'Install' button will be SHOWN.");
             const installButton = document.createElement('button');
-            installButton.textContent = 'Install';
+            installButton.textContent = i18n.get('ctxInstall');
             installButton.className = 'context-menu-item';
             installButton.onclick = () => handleDownloadItemInstall(downloadId);
             contextMenu.appendChild(installButton);
@@ -970,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Visit on Nexus Button
         const nexusButton = document.createElement('button');
-        nexusButton.textContent = 'Visit on Nexus';
+        nexusButton.textContent = i18n.get('ctxVisitNexus');
         nexusButton.className = 'context-menu-item';
         nexusButton.onclick = () => {
             invoke('plugin:shell|open', {
@@ -983,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reveal in Explorer Button
         if (itemData.archivePath) {
             const revealButton = document.createElement('button');
-            revealButton.textContent = 'Reveal in Explorer';
+            revealButton.textContent = i18n.get('ctxRevealExplorer');
             revealButton.className = 'context-menu-item';
             revealButton.onclick = () => invoke('show_in_folder', { path: itemData.archivePath });
             contextMenu.appendChild(revealButton);
@@ -991,7 +1024,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Delete Button
         const deleteButton = document.createElement('button');
-        deleteButton.textContent = 'Delete';
+        deleteButton.textContent = i18n.get('deleteBtn');
         deleteButton.className = 'context-menu-item delete';
         deleteButton.onclick = () => handleDownloadItemDelete(downloadId);
         contextMenu.appendChild(deleteButton);
@@ -1040,8 +1073,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // If it's an auto-update, always replace. Otherwise, ask the user.
                     const shouldReplace = isUpdate ? true : await window.customConfirm(
-                        `A mod with this ID is already installed ('${conflict.old_mod_folder_name}'). Replace it with '${conflict.new_mod_name}'?`,
-                        'Mod Update Conflict'
+                        i18n.get('modUpdateConflictMsg', {
+                            oldName: conflict.old_mod_folder_name,
+                            newName: conflict.new_mod_name
+                        }),
+                        i18n.get('modUpdateConflictTitle')
                     );
 
                     await invoke('resolve_conflict', {
@@ -1092,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await saveChanges();
             await renderModList();
 
-            updateStatus('Installed', 'installed');
+            updateStatus(i18n.get('statusInstalled'), 'installed');
             await saveDownloadHistory(downloadHistory);
 
             // Clean up the old archive file *after* everything else is successful
@@ -1114,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleDownloadItemDelete(downloadId) {
-        const confirmed = await window.customConfirm("Are you sure you want to delete this downloaded mod archive?\n\nThis cannot be undone.", "Delete Archive");
+        const confirmed = await window.customConfirm(i18n.get('deleteDownloadArchiveMsg'), i18n.get('deleteDownloadArchiveTitle'));
         if (!confirmed) return;
 
         const itemIndex = downloadHistory.findIndex(d => d.id === downloadId);
@@ -2052,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modDetailSecondaryActions.innerHTML = '';
         const changelogBtn = document.createElement('button');
         changelogBtn.className = 'detail-action-btn';
-        changelogBtn.textContent = 'Changelogs';
+        changelogBtn.textContent = 'CHANGELOGS';
         changelogBtn.onclick = () => {
             const changelogs = modData.changelogs || {};
             displayChangelogs(modData.name, changelogs);
@@ -2061,7 +2097,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const nexusLinkBtn = document.createElement('a');
         nexusLinkBtn.className = 'detail-action-btn';
-        nexusLinkBtn.textContent = 'Visit on Nexus Mods';
+        nexusLinkBtn.textContent = 'VISIT ON NEXUS';
         nexusLinkBtn.href = `https://www.nexusmods.com/nomanssky/mods/${modData.mod_id}`;
         nexusLinkBtn.target = '_blank';
         modDetailSecondaryActions.appendChild(nexusLinkBtn);
@@ -2228,7 +2264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Prioritize showing remote data, but fall back to local/default data
         infoModName.textContent = remoteInfo?.name || modFolderName;
         infoAuthor.textContent = remoteInfo?.author || 'Unknown';
-        infoDescription.textContent = remoteInfo?.summary || (localModInfo ? 'No description provided.' : 'No local mod info file found.');
+        infoDescription.textContent = remoteInfo?.summary || (localModInfo ? i18n.get('noDescription') : i18n.get('noLocalInfo'));
 
         // Logic to determine latest version
         let latestVersionToShow = remoteInfo?.version || 'N/A';
@@ -2305,15 +2341,15 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const priorityButton = document.createElement('button');
-        priorityButton.textContent = 'Change Priority';
+        priorityButton.textContent = i18n.get('ctxChangePriority');
         priorityButton.className = 'context-menu-item';
         priorityButton.onclick = () => {
             removeContextMenu();
             const allRows = Array.from(modListContainer.querySelectorAll('.mod-row'));
             const modIndex = allRows.findIndex(row => row.dataset.modName === modName);
             const maxPriority = allRows.length - 1;
-            priorityModalTitle.textContent = `Change Priority: ${modName}`;
-            priorityModalDescription.textContent = `Enter a new priority number between 0 and ${maxPriority}.`;
+            priorityModalTitle.textContent = i18n.get('priorityModalTitleWithMod', { modName: modName });
+            priorityModalDescription.textContent = i18n.get('priorityModalDesc', { max: maxPriority });
             priorityInput.value = modIndex;
             priorityInput.max = maxPriority;
             priorityModalOverlay.dataset.modName = modName;
@@ -2685,15 +2721,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Then save profile
                         await saveCurrentProfile();
-                        await window.customAlert(`Successfully installed ${analysis.successes.length} new mod(s) from ${fileName}.`, "Install Complete");
+                        await window.customAlert(
+                            i18n.get('installCompleteMsg', {
+                                count: analysis.successes.length,
+                                fileName: fileName
+                            }),
+                            i18n.get('installCompleteTitle')
+                        );
                     }
 
                     // Handle Conflicts
                     if (analysis.conflicts?.length > 0) {
                         for (const conflict of analysis.conflicts) {
                             const shouldReplace = await window.customConfirm(
-                                `A mod with this ID is already installed ('${conflict.old_mod_folder_name}').\n\nReplace it with '${conflict.new_mod_name}'?`,
-                                'Mod Conflict'
+                                i18n.get('modConflictMsg', {
+                                    oldName: conflict.old_mod_folder_name,
+                                    newName: conflict.new_mod_name
+                                }),
+                                i18n.get('modConflictTitle')
                             );
 
                             await invoke('resolve_conflict', {
@@ -2712,15 +2757,32 @@ document.addEventListener('DOMContentLoaded', () => {
                                     await loadXmlContent(updatedXmlContent, appState.currentFilePath);
                                 }
                                 await saveChanges();
-                                await window.customAlert(`Mod '${conflict.old_mod_folder_name}' was successfully updated to '${conflict.new_mod_name}'.`, "Updated");
+                                await window.customAlert(
+                                    i18n.get('modUpdateSuccessMsg', {
+                                        oldName: conflict.old_mod_folder_name,
+                                        newName: conflict.new_mod_name
+                                    }),
+                                    i18n.get('updatedTitle')
+                                );
                             } else {
-                                await window.customAlert(`Update for mod '${conflict.old_mod_folder_name}' was cancelled.`, "Cancelled");
+                                await window.customAlert(
+                                    i18n.get('modUpdateCancelledMsg', {
+                                        modName: conflict.old_mod_folder_name
+                                    }),
+                                    i18n.get('cancelledTitle')
+                                );
                             }
                         }
                     }
                 } catch (error) {
                     console.error(`Error installing ${fileName}:`, error);
-                    await window.customAlert(`Error installing ${fileName}: ${error}`, "Installation Failed");
+                    await window.customAlert(
+                        i18n.get('installErrorMsg', {
+                            fileName: fileName,
+                            error: error
+                        }),
+                        i18n.get('installFailedTitle')
+                    );
                 }
             }
         };
@@ -2838,7 +2900,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. ADD
     document.getElementById('mpCreateBtn').addEventListener('click', async () => {
-        const name = prompt("Enter new profile name:");
+        const name = prompt(i18n.get('enterProfileName'));
         if (name && name.trim() !== "") {
             try {
                 await invoke('create_empty_profile', { profileName: name });
@@ -2858,7 +2920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('mpCopyBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
 
-        const newName = prompt(`Copy "${selectedProfileInModal}" to new profile named:`);
+        const newName = prompt(i18n.get('copyProfilePrompt', { source: selectedProfileInModal }));
         if (newName && newName.trim() !== "") {
             try {
                 await invoke('copy_profile', {
@@ -2878,9 +2940,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. RENAME
     document.getElementById('mpRenameBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
-        if (selectedProfileInModal === 'Default') return await window.customAlert("Cannot rename Default profile.", "Action Denied");
+        if (selectedProfileInModal === 'Default') return await window.customAlert(i18n.get('cannotRenameDefault'), "Action Denied");
 
-        const newName = prompt(`Rename ${selectedProfileInModal} to:`, selectedProfileInModal);
+        const newName = prompt(i18n.get('renameProfilePrompt', { profile: selectedProfileInModal }));
         if (newName && newName !== selectedProfileInModal) {
             try {
                 await invoke('rename_profile', { oldName: selectedProfileInModal, newName: newName });
@@ -2903,9 +2965,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. DELETE
     document.getElementById('mpRemoveBtn').addEventListener('click', async () => {
         if (!selectedProfileInModal) return;
-        if (selectedProfileInModal === 'Default') return await window.customAlert("Cannot delete Default profile.", "Action Denied");
+        if (selectedProfileInModal === 'Default') return await window.customAlert(i18n.get('cannotDeleteDefault'), "Action Denied");
 
-        if (await window.customConfirm(`Delete profile "${selectedProfileInModal}"?`, "Confirm")) {
+        if (await window.customConfirm(i18n.get('deleteProfileConfirm', { profile: selectedProfileInModal }), "Confirm")) {
             try {
                 await invoke('delete_profile', { profileName: selectedProfileInModal });
 
@@ -3058,8 +3120,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetProfile = profileSelect.value;
 
         const confirmed = await window.customConfirm(
-            `Switch profile to "${targetProfile}"?\n\nThis will purge current mods and install the profile's mods.`,
-            "Switch Profile"
+            i18n.get('switchProfileMsg', {
+                profileName: targetProfile
+            }),
+            i18n.get('switchProfileTitle')
         );
 
         // If the user clicked Cancel (false), stop everything immediately.
@@ -3134,14 +3198,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (shouldBeInstalled) {
                     if (item.statusClass !== 'installed') {
-                        item.statusText = 'Installed';
+                        item.statusText = i18n.get('statusInstalled');
                         item.statusClass = 'installed';
                         changed = true;
                     }
                 } else {
                     // If it was installed but is NOT in this profile, set it to Downloaded
                     if (item.statusClass === 'installed' || item.statusClass === 'success') {
-                        item.statusText = 'Downloaded';
+                        item.statusText = i18n.get('statusDownloaded');
                         item.statusClass = 'success';
                         changed = true;
                     }
@@ -3243,7 +3307,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const newPriority = parseInt(priorityInput.value, 10);
         const maxPriority = parseInt(priorityInput.max, 10);
         if (isNaN(newPriority) || newPriority < 0 || newPriority > maxPriority) {
-            await window.customAlert(`Invalid priority. Please enter a number between 0 and ${maxPriority}.`, "Invalid Input");
+            await window.customAlert(
+                i18n.get('invalidPriorityMsg', { max: maxPriority }),
+                i18n.get('invalidInputTitle')
+            );
             return;
         }
         let currentOrder = Array.from(modListContainer.querySelectorAll('.mod-row')).map(row => row.dataset.modName);
@@ -3342,10 +3409,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     clearDownloadHistoryBtn.addEventListener('click', async () => {
         // 1. Show the new, more explicit confirmation dialog.
-        const confirmed = await window.customConfirm(
-            'Are you sure you want to delete ALL downloaded mod archives?\n\nThis will remove the files from your computer and cannot be undone.',
-            'Delete All Downloads'
-        );
+        const confirmed = await window.customConfirm(i18n.get('deleteAllDownloadsMsg'), i18n.get('deleteAllDownloadsTitle'));
 
         if (confirmed) {
             try {
@@ -3376,7 +3440,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('resetWarningsBtn').addEventListener('click', async () => {
         localStorage.removeItem('suppressUntrackedWarning');
-        await window.customAlert("Hidden warnings have been reset and will appear again if issues are detected.", "Reset Complete");
+        await window.customAlert(i18n.get('resetWarningMsg'), i18n.get('resetWarningTitle'));
     });
 
     nxmHandlerBtn.addEventListener('click', async () => {
@@ -3408,10 +3472,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let confirmed = false;
 
         if (isCurrentlyRegistered) {
-            confirmed = await window.customConfirm(
-                'Singularity is currently the default handler for NXM links.\nDo you want to remove this association?',
-                'Remove NXM Handler'
-            );
+            confirmed = await window.customConfirm(i18n.get('removeNXMHandlerMsg'), i18n.get('removeNXMHandlerTitle'));
             if (confirmed) {
                 try {
                     await invoke('unregister_nxm_protocol');
@@ -3422,10 +3483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            confirmed = await window.customConfirm(
-                'Do you want to set Singularity as the default application for "Mod Manager Download" (nxm://) links?',
-                'Set NXM Handler'
-            );
+            confirmed = await window.customConfirm(i18n.get('addNXMHandlerMsg'), i18n.get('addNXMHandlerTitle'));
             if (confirmed) {
                 try {
                     await invoke('register_nxm_protocol');
@@ -3467,7 +3525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. SET UI STATE: LAUNCHING
         const originalText = launchText.textContent;
         launchBtn.classList.add('is-launching');
-        launchText.textContent = "LAUNCHING...";
+        launchText.textContent = i18n.get('launchingStateText');
 
         try {
             // 2. CALL RUST
@@ -3495,7 +3553,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // LOGOUT
         if (isLoggedIn) {
-            const confirmed = await window.customConfirm("Are you sure you want to disconnect your Nexus Mods account?", "Disconnect");
+            const confirmed = await window.customConfirm(i18n.get('disconnectNexusAccMsg'), i18n.get('disconnectNexusAccTitle'));
             if (confirmed) {
                 await invoke('logout_nexus');
                 await validateLoginState();
