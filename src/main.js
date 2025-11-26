@@ -623,6 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
         modListContainer.innerHTML = '';
         appState.installedModsMap.clear();
 
+        const suppressUntracked = localStorage.getItem('suppressUntrackedWarning') === 'true';
+
         const disableAllNode = appState.xmlDoc.querySelector('Property[name="DisableAllMods"]');
         if (disableAllNode) {
             disableAllSwitch.checked = disableAllNode.getAttribute('value').toLowerCase() === 'true';
@@ -651,9 +653,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'mod-row';
             row.dataset.modName = modData.folder_name;
+            // --- Conditional Red Dot Logic ---
+            // If user hasn't suppressed warnings AND local_info is missing, show red dot
+            const showRedDot = !suppressUntracked && !modData.local_info;
+
+            const untrackedHtml = showRedDot
+                ? `<span class="untracked-indicator" title="${i18n.get('untrackedModTooltip')}"></span>`
+                : '';
             row.innerHTML = `
                 <div class="mod-name-container">
                     <span class="mod-name-text">${modData.folder_name}</span>
+                    ${untrackedHtml}
                     <span class="update-indicator hidden" data-i18n-title="updateAvailableTooltip" title="Update available"></span>
                 </div>
                 <div class="priority"><input type="text" class="priority-input" value="${index}" readonly></div>
@@ -1191,9 +1201,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userResult = await openFolderSelectionModal(analysis.available_folders, item.fileName, analysis.temp_id);
 
                 if (!userResult) {
-                    // User Cancelled: Cleanup staging and stop
+                    // User Cancelled - Clean up staging
                     await invoke('clean_staging_folder');
                     updateStatus(i18n.get('statusCancelled'), 'cancelled');
+
+                    // --- Revert status after 5 seconds ---
+                    setTimeout(() => {
+                        const current = downloadHistory.find(d => d.id === downloadId);
+                        // Only revert if it is still in the 'cancelled' state
+                        if (current && current.statusClass === 'cancelled') {
+                            current.statusText = i18n.get('statusDownloaded');
+                            current.statusClass = 'success';
+                            renderDownloadHistory();
+                        }
+                    }, 5000);
+
                     return;
                 }
 
@@ -1207,7 +1229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await processInstallAnalysis(finalAnalysis, item, isUpdate);
 
             } else {
-                // 3b. Single folder detected (or direct install), process results immediately
+                // 3b. Single folder detected (or direct install)
                 await processInstallAnalysis(analysis, item, isUpdate);
             }
 
@@ -2750,7 +2772,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 2. Phase 1: Analyze / Extract
                     const analysis = await invoke('install_mod_from_archive', { archivePathStr: filePath });
 
-                    // Update item with the persistent path in downloads
                     if (analysis.active_archive_path) {
                         newItem.archivePath = analysis.active_archive_path;
                     }
@@ -2771,9 +2792,20 @@ document.addEventListener('DOMContentLoaded', () => {
                             newItem.statusText = i18n.get('statusCancelled') || "Cancelled";
                             newItem.statusClass = 'cancelled';
 
-                            // Save history so user can retry later (Zip remains)
                             await saveDownloadHistory(downloadHistory);
                             renderDownloadHistory();
+
+                            // --- Revert status after 5 seconds ---
+                            setTimeout(() => {
+                                const current = downloadHistory.find(d => d.id === downloadId);
+                                if (current && current.statusClass === 'cancelled') {
+                                    current.statusText = i18n.get('statusDownloaded');
+                                    current.statusClass = 'success';
+                                    renderDownloadHistory();
+                                    saveDownloadHistory(downloadHistory);
+                                }
+                            }, 5000);
+
                             continue;
                         }
 
@@ -2786,20 +2818,32 @@ document.addEventListener('DOMContentLoaded', () => {
                         await processInstallAnalysis(finalResult, newItem, false);
 
                     } else {
-                        // SINGLE FOLDER
                         await processInstallAnalysis(analysis, newItem, false);
                     }
 
-                    // 4. Success Popup (Restored)
+                    // 4. Success Popup (With Suppression Logic)
                     const installedCount = finalResult.successes ? finalResult.successes.length : 0;
-                    if (installedCount > 0) {
-                        await window.customAlert(
+
+                    // Check preference
+                    const suppressSuccess = localStorage.getItem('suppressInstallSuccess') === 'true';
+
+                    if (!suppressSuccess && installedCount > 0) {
+                        // We use customConfirm here.
+                        // TRUE = OK
+                        // FALSE = Don't Show Again
+                        const keepShowing = await window.customConfirm(
                             i18n.get('installCompleteMsg', {
                                 count: installedCount,
                                 fileName: fileName
                             }),
-                            i18n.get('installCompleteTitle')
+                            i18n.get('installCompleteTitle'),
+                            i18n.get('okBtn'),              // "OK"
+                            i18n.get('dontShowAgainBtn')    // "Don't Show Again"
                         );
+
+                        if (keepShowing === false) {
+                            localStorage.setItem('suppressInstallSuccess', 'true');
+                        }
                     }
 
                 } catch (error) {
@@ -2812,13 +2856,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     await window.customAlert(`${i18n.get('installFailedTitle')}: ${error}`, "Error");
 
                     // 5. Cleanup on Failure
-                    // Delete the copied zip to prevent junk accumulation
                     try {
                         const downloadsDir = await invoke('get_downloads_path');
                         const targetPath = await join(downloadsDir, fileName);
                         await invoke('delete_archive_file', { path: targetPath });
 
-                        // Remove from history list since file is gone
                         downloadHistory = downloadHistory.filter(d => d.id !== downloadId);
                         renderDownloadHistory();
                         await saveDownloadHistory(downloadHistory);
@@ -3697,7 +3739,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('resetWarningsBtn').addEventListener('click', async () => {
         localStorage.removeItem('suppressUntrackedWarning');
+        localStorage.removeItem('suppressInstallSuccess');
         await window.customAlert(i18n.get('resetWarningMsg'), i18n.get('resetWarningTitle'));
+
+        await renderModList();
     });
 
     nxmHandlerBtn.addEventListener('click', async () => {

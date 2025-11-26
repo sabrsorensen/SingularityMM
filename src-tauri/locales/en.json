@@ -33,6 +33,7 @@
   "launchingStateText": "LAUNCHING...",
   "noDescription": "No description provided.",
   "noLocalInfo": "No local mod info file found.",
+  "untrackedModTooltip": "Untracked Mod (Manually Installed)",
   "__comment_SETTINGS": "=== SETTINGS MODAL ===",
   "settingsModalTitle": "SETTINGS",
   "settingsModalCloseBtn": "Close",
