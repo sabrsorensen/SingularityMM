@@ -653,9 +653,9 @@ fn install_mod_from_archive(app: AppHandle, archive_path_str: String) -> Result<
     }
     
     // CASE B: Only 1 deep folder found
-    // Install it automatically, but we MUST pass the specific path so it gets moved correctly
+    // Install it automatically
     if installable_paths.len() == 1 {
-        let mut analysis = finalize_installation(app, temp_id, vec![installable_paths[0].clone()], false)?;
+        let mut analysis = finalize_installation(app, temp_id, vec![installable_paths[0].clone()], true)?;
         analysis.active_archive_path = Some(final_archive_path_str);
         return Ok(analysis);
     }
