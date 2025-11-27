@@ -183,6 +183,12 @@ struct FileNode {
     is_dir: bool,
 }
 
+#[derive(Serialize, Clone)]
+struct InstallProgressPayload {
+    id: String, // The download ID (we need to pass this from JS to Rust to send it back)
+    step: String,
+}
+
 const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <Data template="GcModSettings">
   <Property name="DisableAllMods" value="false" />
@@ -627,46 +633,87 @@ fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
 }
 
 #[tauri::command]
-fn install_mod_from_archive(app: AppHandle, archive_path_str: String) -> Result<InstallationAnalysis, String> {
-    let mut archive_path = PathBuf::from(&archive_path_str);
+async fn install_mod_from_archive(
+    app: AppHandle, 
+    archive_path_str: String, 
+    download_id: String 
+) -> Result<InstallationAnalysis, String> {
+    let emit_progress = |step: &str| {
+        let _ = app.emit("install-progress", InstallProgressPayload {
+            id: download_id.clone(),
+            step: step.to_string(),
+        });
+    };
+
+    emit_progress("Initializing...");
+
+    let archive_path = PathBuf::from(&archive_path_str);
     let downloads_dir = get_downloads_dir(&app)?;
     let staging_dir = get_staging_dir(&app)?; 
 
-    // 1. Ensure file is in downloads
-    if !downloads_dir.exists() { 
-        fs::create_dir_all(&downloads_dir).map_err(|e| e.to_string())?; 
-    }
+    // 1. Copying Phase
+    emit_progress("Copying to library...");
     
-    let in_downloads = if let (Ok(p1), Ok(p2)) = (archive_path.canonicalize(), downloads_dir.canonicalize()) { 
-        p1.starts_with(p2) 
-    } else { 
-        false 
-    };
+    let archive_path_clone = archive_path.clone();
+    let downloads_dir_clone = downloads_dir.clone();
+    
+    // FIX: Explicit return type and .to_string() for the error
+    let (final_archive_path, _) = tauri::async_runtime::spawn_blocking(move || -> Result<(PathBuf, bool), String> {
+        if !downloads_dir_clone.exists() { 
+            fs::create_dir_all(&downloads_dir_clone).map_err(|e| e.to_string())?; 
+        }
+        
+        let in_downloads = if let (Ok(p1), Ok(p2)) = (archive_path_clone.canonicalize(), downloads_dir_clone.canonicalize()) { 
+            p1.starts_with(p2) 
+        } else { 
+            false 
+        };
 
-    if !in_downloads {
-        let file_name = archive_path.file_name().ok_or("Invalid filename")?;
-        let target_path = downloads_dir.join(file_name);
-        fs::copy(&archive_path, &target_path).map_err(|e| e.to_string())?;
-        archive_path = target_path;
-    }
+        if !in_downloads {
+            // FIX: Convert &str to String
+            let file_name = archive_path_clone.file_name()
+                .ok_or("Invalid filename".to_string())?; 
+            
+            let target_path = downloads_dir_clone.join(file_name);
+            fs::copy(&archive_path_clone, &target_path).map_err(|e| e.to_string())?;
+            Ok((target_path, false))
+        } else {
+            Ok((archive_path_clone, true))
+        }
+    }).await.map_err(|e| e.to_string())??;
 
-    // Store path for later use
-    let final_archive_path_str = archive_path.to_string_lossy().into_owned();
+    let final_archive_path_str = final_archive_path.to_string_lossy().into_owned();
 
-    // 2. Extract to Staging
-    let temp_extract_path = extract_archive_to_temp(&archive_path, &staging_dir)?;
+    // 2. Extraction Phase
+    emit_progress("Extracting (this may take a while)...");
+    
+    let final_archive_path_clone = final_archive_path.clone();
+    let staging_dir_clone = staging_dir.clone();
 
-    // 3. Analyze Contents
-    let mut installable_paths = scan_for_installable_mods(&temp_extract_path, &temp_extract_path);
+    let temp_extract_path = tauri::async_runtime::spawn_blocking(move || {
+        extract_archive_to_temp(&final_archive_path_clone, &staging_dir_clone)
+    }).await.map_err(|e| e.to_string())??;
+
+    // 3. Analysis Phase
+    emit_progress("Analyzing structure...");
+    
+    let temp_extract_path_clone = temp_extract_path.clone();
+    
+    let (folder_entries, installable_paths) = tauri::async_runtime::spawn_blocking(move || {
+        let installable = scan_for_installable_mods(&temp_extract_path_clone, &temp_extract_path_clone);
+        let entries: Vec<_> = fs::read_dir(&temp_extract_path_clone)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().is_dir())
+            .collect();
+        Ok::<_, String>((entries, installable))
+    }).await.map_err(|e| e.to_string())??;
+
     let temp_id = temp_extract_path.file_name().unwrap().to_string_lossy().into_owned();
 
-    // Filter "." if it's the only result (Standard correct structure)
-    if installable_paths.len() == 1 && installable_paths[0] == "." {
-        installable_paths.clear(); 
-    }
-
-    // CASE A: Multiple valid mod folders found -> SHOW UI
+    // CASE A: Multiple valid mod folders found
     if installable_paths.len() > 1 {
+        emit_progress("Waiting for selection...");
         return Ok(InstallationAnalysis {
             successes: vec![],
             conflicts: vec![],
@@ -678,41 +725,21 @@ fn install_mod_from_archive(app: AppHandle, archive_path_str: String) -> Result<
         });
     }
     
-    // CASE B: Only 1 valid mod folder found
+    // CASE B: Only 1 deep folder found
     if installable_paths.len() == 1 {
-        let found_path = &installable_paths[0];
-        if found_path.contains('/') || found_path.contains('\\') {
-             return Ok(InstallationAnalysis {
-                successes: vec![],
-                conflicts: vec![],
-                messy_archive_path: None,
-                active_archive_path: Some(final_archive_path_str),
-                selection_needed: true,
-                temp_id: Some(temp_id),
-                available_folders: Some(installable_paths),
-            });
-        }
-
-        // If it does NOT contain a separator, it's a clean top-level mod.
-        // Auto-install it.
-        let mut analysis = finalize_installation(app, temp_id, vec![found_path.clone()], false)?;
+        emit_progress("Finalizing...");
+        let mut analysis = finalize_installation(app, temp_id, vec![installable_paths[0].clone()], true)?;
         analysis.active_archive_path = Some(final_archive_path_str);
         return Ok(analysis);
     }
 
     // CASE C: Fallback
-    // Check top level folders just in case it's a weird non-standard mod
-    let folder_entries: Vec<_> = fs::read_dir(&temp_extract_path)
-        .map_err(|e| e.to_string())?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_dir())
-        .collect();
-
     if folder_entries.len() > 1 {
         let folder_names: Vec<String> = folder_entries.iter()
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect();
             
+        emit_progress("Waiting for selection...");
         return Ok(InstallationAnalysis {
             successes: vec![],
             conflicts: vec![],
@@ -724,7 +751,8 @@ fn install_mod_from_archive(app: AppHandle, archive_path_str: String) -> Result<
         });
     }
 
-    // CASE D: Single folder / Install All (Default)
+    // CASE D: Single folder / Install All
+    emit_progress("Finalizing...");
     let mut analysis = finalize_installation(app, temp_id, vec![], false)?;
     analysis.active_archive_path = Some(final_archive_path_str);
     

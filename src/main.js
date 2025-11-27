@@ -619,6 +619,19 @@ document.addEventListener('DOMContentLoaded', () => {
             handleNxmLink(event.payload);
         });
 
+        listen('install-progress', (event) => {
+            const payload = event.payload;
+            const item = downloadHistory.find(d => d.id === payload.id);
+            if (item) {
+                // We update the DOM directly for performance, and the history object
+                item.statusText = payload.step;
+
+                // Find the specific row in the DOM to update text without re-rendering the whole list
+                // (Optional optimization, but re-rendering is fine for now)
+                renderDownloadHistory();
+            }
+        });
+
         loadDataInBackground();
     };
 
@@ -1210,8 +1223,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             updateStatus(isUpdate ? i18n.get('statusUpdating') : i18n.get('statusWaiting'), 'progress');
 
-            // 1. Call Phase 1: Analyze / Extract to Staging
-            const analysis = await invoke('install_mod_from_archive', { archivePathStr: item.archivePath });
+            // 1. Call Phase 1 with the ID
+            const analysis = await invoke('install_mod_from_archive', {
+                archivePathStr: item.archivePath,
+                downloadId: downloadId // <--- PASS ID HERE
+            });
 
             // 2. Check if user selection is required (Multi-folder zip)
             if (analysis.selection_needed) {
@@ -2778,7 +2794,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log(`Processing dropped file: ${fileName}`);
 
                     // 2. Phase 1: Analyze / Extract
-                    const analysis = await invoke('install_mod_from_archive', { archivePathStr: filePath });
+                    const analysis = await invoke('install_mod_from_archive', {
+                        archivePathStr: filePath,
+                        downloadId: downloadId // <--- PASS ID HERE
+                    });
 
                     if (analysis.active_archive_path) {
                         newItem.archivePath = analysis.active_archive_path;
