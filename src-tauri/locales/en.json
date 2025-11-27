@@ -90,6 +90,7 @@
   "statusInstalled": "Installed",
   "statusDownloaded": "Downloaded",
   "updateModalTitle": "MOD UPDATES",
+  "btnVisitNexus": "Visit on Nexus Mods",
   "updateChecking": "Checking for updates...",
   "updateNoneFound": "All mods are up to date!",
   "updateModalCloseBtn": "Close",

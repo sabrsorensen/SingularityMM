@@ -9,6 +9,7 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import iconSteam from './assets/icon-steam.png';
 import iconGog from './assets/icon-gog.png';
 import iconXbox from './assets/icon-xbox.png';
+import iconNexus from './assets/icon-nexus.png';
 
 // Get the window instance for listener attachment
 const appWindow = getCurrentWindow();
@@ -820,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.className = 'update-item';
 
                 const nexusLinkHtml = updateInfo.nexusUrl
-                    ? `<a href="${updateInfo.nexusUrl}" class="nexus-button" target="_blank" title="Visit on Nexus Mods"><img src="/src/assets/icon-nexus.png" alt="Nexus"></a>`
+                    ? `<a href="${updateInfo.nexusUrl}" class="nexus-button" target="_blank" title="${i18n.get('btnVisitNexus')}"><img src="${iconNexus}" alt="Nexus"></a>`
                     : '';
 
                 // Create a nice list string: "Folder A, Folder B"
@@ -834,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="update-item-info">
                         <div class="update-item-name">${updateInfo.name}</div>
                         <div class="update-item-version">
-                            ${updateInfo.installed} <span class="arrow">--></span> <span class="latest">${updateInfo.latest}</span>
+                            ${updateInfo.installed} <span class="arrow">→</span> <span class="latest">${updateInfo.latest}</span>
                         </div>
                         ${folderCountText}
                     </div>
