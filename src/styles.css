@@ -1135,10 +1135,6 @@ label.switch:has(input:checked)::before {
     transition: background-color 0.2s;
 }
 
-.download-item.installable:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
 .download-item .download-item-name {
     white-space: nowrap;
     overflow: hidden;
@@ -1154,16 +1150,32 @@ label.switch:has(input:checked)::before {
 .download-list-container {
     margin-bottom: 20px;
     max-height: 400px;
+    min-height: 50px;
     overflow-y: auto;
+    background-color: var(--c-bg-mod-row-alt);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
 .download-item {
-    padding: 12px;
+    padding: 8px 12px;
     border-radius: 4px;
     background-color: rgba(0, 0, 0, 0.2);
-    margin-bottom: 8px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    display: grid;
+    grid-template-columns: 1fr 120px 80px 120px;
+    align-items: center;
+    gap: 15px;
+    position: relative;
+    overflow: hidden;
+}
+
+.download-item:hover {
+    background-color: rgba(0, 0, 0, 0.4);
 }
 
 .download-item-name {
@@ -1178,6 +1190,10 @@ label.switch:has(input:checked)::before {
     opacity: 0.8;
     margin-top: 4px;
     transition: color 0.3s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* Status-specific coloring */
@@ -1203,6 +1219,17 @@ label.switch:has(input:checked)::before {
 .download-item-status.status-cancelled {
     color: var(--c-danger);
     font-weight: bold;
+}
+
+.download-progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background-color: var(--c-accent-primary);
+    width: 0%;
+    transition: width 0.2s linear;
+    opacity: 0.8;
 }
 
 /* --- SETTINGS MODAL STYLES --- */

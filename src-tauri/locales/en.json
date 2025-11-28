@@ -100,6 +100,7 @@
   "installSelectedBtn": "Install",
   "flattenLabel": "Smart Extract (Auto-detect Game Data)",
   "statusCancelled": "Cancelled",
+  "statusDownloading": "Downloading...",
   "browseTotalMods": "MODS: {{count}}",
   "__comment_CONTEXT": "=== CONTEXT MENUS ===",
   "ctxInstall": "Install",

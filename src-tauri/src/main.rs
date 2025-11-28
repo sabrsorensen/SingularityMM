@@ -31,6 +31,7 @@ use futures_util::{StreamExt, SinkExt};
 use url::Url;
 use tauri::path::BaseDirectory;
 use std::sync::Mutex;
+use std::io::Write;
 
 // --- STRUCTS ---
 
@@ -185,8 +186,9 @@ struct FileNode {
 
 #[derive(Serialize, Clone)]
 struct InstallProgressPayload {
-    id: String, // The download ID (we need to pass this from JS to Rust to send it back)
+    id: String,
     step: String,
+    progress: Option<u64>, // 0 to 100
 }
 
 const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -492,64 +494,79 @@ fn find_gamepass_path() -> Option<PathBuf> {
     None
 }
 
-fn extract_archive_to_temp(archive_path: &Path, target_staging_root: &Path) -> Result<PathBuf, String> {
+fn extract_archive_to_temp<F>(
+    archive_path: &Path, 
+    target_staging_root: &Path,
+    on_progress: F
+) -> Result<PathBuf, String> 
+where F: Fn(u64) 
+{
     let unique_folder_name = format!("extract_{}", Utc::now().timestamp_millis());
     let temp_extract_path = target_staging_root.join(unique_folder_name);
     
     fs::create_dir_all(&temp_extract_path)
         .map_err(|e| format!("Could not create extraction dir: {}", e))?;
 
-    // Need the absolute path because RAR logic changes the working directory
     let abs_archive_path = archive_path.canonicalize()
         .map_err(|e| format!("Invalid archive path '{}': {}", archive_path.display(), e))?;
 
-    let extension = archive_path
-        .extension()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or("")
-        .to_lowercase();
+    let extension = archive_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
     match extension.as_str() {
         "zip" => {
-            let file = fs::File::open(&abs_archive_path)
-                .map_err(|e| format!("Failed to open ZIP file: {}", e))?;
+            let file = fs::File::open(&abs_archive_path).map_err(|e| e.to_string())?;
+            let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
             
-            let mut archive = ZipArchive::new(file)
-                .map_err(|e| format!("Failed to read ZIP archive structure: {}", e))?;
-            
-            archive.extract(&temp_extract_path)
-                .map_err(|e| format!("Failed to extract ZIP contents: {}", e))?;
+            let total_files = archive.len();
+            for i in 0..total_files {
+                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                
+                let outpath = match file.enclosed_name() {
+                    Some(path) => temp_extract_path.join(path),
+                    None => continue,
+                };
+
+                if file.name().ends_with('/') {
+                    fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        if !p.exists() { fs::create_dir_all(&p).map_err(|e| e.to_string())?; }
+                    }
+                    let mut outfile = fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                    io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                }
+                
+                let pct = ((i as u64 + 1) * 100) / total_files as u64;
+                on_progress(pct);
+            }
         }
         "rar" => {
-            let _guard = DIR_LOCK.lock().map_err(|e| format!("Failed to acquire thread lock: {}", e))?;
+            let _guard = DIR_LOCK.lock().map_err(|e| e.to_string())?;
+            let original_dir = env::current_dir().map_err(|e| e.to_string())?;
             
-            let original_dir = env::current_dir()
-                .map_err(|e| format!("Failed to get current working directory: {}", e))?;
-            
-            env::set_current_dir(&temp_extract_path)
-                .map_err(|e| format!("Failed to change directory to staging area: {}", e))?;
+            // Change directory to extract relative paths
+            env::set_current_dir(&temp_extract_path).map_err(|e| e.to_string())?;
             
             let extract_result = (|| -> Result<(), String> {
                 let mut archive = unrar::Archive::new(&abs_archive_path)
                     .open_for_processing()
-                    .map_err(|e| format!("Failed to open RAR archive: {:?}", e))?;
-
+                    .map_err(|e| format!("{:?}", e))?;
+                
                 while let Ok(Some(header)) = archive.read_header() {
-                    archive = header.extract()
-                        .map_err(|e| format!("Failed to extract RAR entry: {:?}", e))?;
+                    archive = header.extract().map_err(|e| format!("{:?}", e))?;
+                    on_progress(0); 
                 }
                 Ok(())
             })();
 
-            if let Err(e) = env::set_current_dir(&original_dir) {
-                eprintln!("CRITICAL: Failed to restore working directory: {}", e);
-            }
-
+            let _ = env::set_current_dir(&original_dir);
             extract_result?;
+            on_progress(100);
         }
         "7z" => {
-            sevenz_rust::decompress_file(&abs_archive_path, &temp_extract_path)
-                .map_err(|e| format!("Failed to extract 7z archive: {}", e))?;
+            on_progress(50);
+            sevenz_rust::decompress_file(&abs_archive_path, &temp_extract_path).map_err(|e| e.to_string())?;
+            on_progress(100);
         }
         _ => return Err(format!("Unsupported file type: .{}", extension)),
     }
@@ -638,10 +655,26 @@ async fn install_mod_from_archive(
     archive_path_str: String, 
     download_id: String 
 ) -> Result<InstallationAnalysis, String> {
+    
+    // 1. Setup Progress Callbacks
+    let id_for_progress = download_id.clone();
+    let app_handle_for_extract = app.clone();
+
+    // Callback specifically for the extraction function (reports %)
+    let progress_callback = move |pct: u64| {
+        let _ = app_handle_for_extract.emit("install-progress", InstallProgressPayload {
+            id: id_for_progress.clone(),
+            step: format!("Extracting: {}%", pct),
+            progress: Some(pct),
+        });
+    };
+
+    // General helper for text updates
     let emit_progress = |step: &str| {
         let _ = app.emit("install-progress", InstallProgressPayload {
             id: download_id.clone(),
             step: step.to_string(),
+            progress: None 
         });
     };
 
@@ -651,13 +684,12 @@ async fn install_mod_from_archive(
     let downloads_dir = get_downloads_dir(&app)?;
     let staging_dir = get_staging_dir(&app)?; 
 
-    // 1. Copying Phase
+    // 2. Copying Phase (Background Thread)
     emit_progress("Copying to library...");
     
     let archive_path_clone = archive_path.clone();
     let downloads_dir_clone = downloads_dir.clone();
     
-    // FIX: Explicit return type and .to_string() for the error
     let (final_archive_path, _) = tauri::async_runtime::spawn_blocking(move || -> Result<(PathBuf, bool), String> {
         if !downloads_dir_clone.exists() { 
             fs::create_dir_all(&downloads_dir_clone).map_err(|e| e.to_string())?; 
@@ -670,10 +702,7 @@ async fn install_mod_from_archive(
         };
 
         if !in_downloads {
-            // FIX: Convert &str to String
-            let file_name = archive_path_clone.file_name()
-                .ok_or("Invalid filename".to_string())?; 
-            
+            let file_name = archive_path_clone.file_name().ok_or("Invalid filename".to_string())?; 
             let target_path = downloads_dir_clone.join(file_name);
             fs::copy(&archive_path_clone, &target_path).map_err(|e| e.to_string())?;
             Ok((target_path, false))
@@ -684,34 +713,39 @@ async fn install_mod_from_archive(
 
     let final_archive_path_str = final_archive_path.to_string_lossy().into_owned();
 
-    // 2. Extraction Phase
-    emit_progress("Extracting (this may take a while)...");
+    // 3. Extraction Phase (Background Thread + Progress Callback)
     
     let final_archive_path_clone = final_archive_path.clone();
     let staging_dir_clone = staging_dir.clone();
 
     let temp_extract_path = tauri::async_runtime::spawn_blocking(move || {
-        extract_archive_to_temp(&final_archive_path_clone, &staging_dir_clone)
+        extract_archive_to_temp(&final_archive_path_clone, &staging_dir_clone, progress_callback)
     }).await.map_err(|e| e.to_string())??;
 
-    // 3. Analysis Phase
+    // 4. Analysis Phase (Background Thread)
     emit_progress("Analyzing structure...");
     
     let temp_extract_path_clone = temp_extract_path.clone();
     
     let (folder_entries, installable_paths) = tauri::async_runtime::spawn_blocking(move || {
+        // Deep scan for game data folders
         let installable = scan_for_installable_mods(&temp_extract_path_clone, &temp_extract_path_clone);
+        
+        // Shallow scan for fallback
         let entries: Vec<_> = fs::read_dir(&temp_extract_path_clone)
             .map_err(|e| e.to_string())?
             .filter_map(Result::ok)
             .filter(|entry| entry.path().is_dir())
             .collect();
+            
         Ok::<_, String>((entries, installable))
     }).await.map_err(|e| e.to_string())??;
 
     let temp_id = temp_extract_path.file_name().unwrap().to_string_lossy().into_owned();
 
-    // CASE A: Multiple valid mod folders found
+    // --- DECISION LOGIC ---
+
+    // CASE A: Multiple valid mod folders found (e.g. "Option A", "Option B")
     if installable_paths.len() > 1 {
         emit_progress("Waiting for selection...");
         return Ok(InstallationAnalysis {
@@ -725,7 +759,8 @@ async fn install_mod_from_archive(
         });
     }
     
-    // CASE B: Only 1 deep folder found
+    // CASE B: Only 1 deep folder found (e.g. "Data/MyMod")
+    // Auto-install it, but flatten it to root (move "MyMod" to "MODS/", discarding "Data")
     if installable_paths.len() == 1 {
         emit_progress("Finalizing...");
         let mut analysis = finalize_installation(app, temp_id, vec![installable_paths[0].clone()], true)?;
@@ -733,7 +768,8 @@ async fn install_mod_from_archive(
         return Ok(analysis);
     }
 
-    // CASE C: Fallback
+    // CASE C: Fallback - Scanner didn't find standard game folders?
+    // Check top level folders. If multiple generic folders exist, ask user.
     if folder_entries.len() > 1 {
         let folder_names: Vec<String> = folder_entries.iter()
             .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -752,6 +788,7 @@ async fn install_mod_from_archive(
     }
 
     // CASE D: Single folder / Install All
+    // Standard install.
     emit_progress("Finalizing...");
     let mut analysis = finalize_installation(app, temp_id, vec![], false)?;
     analysis.active_archive_path = Some(final_archive_path_str);
@@ -1471,11 +1508,16 @@ fn register_nxm_protocol() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn download_mod_archive(app: AppHandle, download_url: String, file_name: String) -> Result<DownloadResult, String> {
+async fn download_mod_archive(
+    app: AppHandle, 
+    download_url: String, 
+    file_name: String,
+    download_id: Option<String> 
+) -> Result<DownloadResult, String> {
     let downloads_path = get_downloads_dir(&app)?;
     let final_archive_path = downloads_path.join(&file_name);
 
-    let response = reqwest::get(&download_url)
+    let mut response = reqwest::get(&download_url)
         .await
         .map_err(|e| format!("Failed to start download: {}", e))?;
 
@@ -1483,15 +1525,34 @@ async fn download_mod_archive(app: AppHandle, download_url: String, file_name: S
         return Err(format!("Download failed with status: {}", response.status()));
     }
 
-    let file_bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read downloaded file bytes: {}", e))?;
-
-    fs::write(&final_archive_path, &file_bytes)
-        .map_err(|e| format!("Failed to write archive to downloads folder: {}", e))?;
+    // Get Total Size
+    let total_size = response.content_length().unwrap_or(0);
     
-    // --- Get file metadata ---
+    // Create file
+    let mut file = fs::File::create(&final_archive_path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    let mut downloaded: u64 = 0;
+
+    // Stream chunks
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        file.write_all(&chunk).map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+
+        // Emit Progress if we have an ID and a total size
+        if let Some(id) = &download_id {
+            if total_size > 0 {
+                let pct = (downloaded * 100) / total_size;
+                let _ = app.emit("install-progress", InstallProgressPayload {
+                    id: id.clone(),
+                    step: format!("Downloading: {}%", pct),
+                    progress: Some(pct),
+                });
+            }
+        }
+    }
+    
+    // Finalize metadata
     let metadata = fs::metadata(&final_archive_path).map_err(|e| e.to_string())?;
     let file_size = metadata.len();
     let created_time = metadata.created().map_err(|e| e.to_string())?
@@ -1756,7 +1817,7 @@ async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
         }).unwrap();
 
         if archive_path.exists() {
-             match extract_archive_to_temp(&archive_path, &mods_dir) { 
+             match extract_archive_to_temp(&archive_path, &mods_dir, |_| {}) {
                 Ok(temp_path) => {
                      let has_specific_options = entry.installed_options.as_ref().map(|o| !o.is_empty()).unwrap_or(false);
 

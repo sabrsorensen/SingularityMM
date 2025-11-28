@@ -623,12 +623,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = event.payload;
             const item = downloadHistory.find(d => d.id === payload.id);
             if (item) {
-                // We update the DOM directly for performance, and the history object
                 item.statusText = payload.step;
 
-                // Find the specific row in the DOM to update text without re-rendering the whole list
-                // (Optional optimization, but re-rendering is fine for now)
-                renderDownloadHistory();
+                // Update UI immediately
+                const row = document.querySelector(`.download-item[data-download-id="${payload.id}"]`);
+                if (row) {
+                    const statusEl = row.querySelector('.download-item-status');
+                    if (statusEl) statusEl.textContent = payload.step;
+
+                    const bar = row.querySelector('.download-progress-bar');
+                    if (bar && payload.progress !== undefined && payload.progress !== null) {
+                        bar.style.width = `${payload.progress}%`;
+                        bar.classList.remove('indeterminate'); // Stop pulsing if we have numbers
+                    } else if (bar) {
+                        // We are analyzing/copying, show full width or pulse
+                        bar.style.width = '100%';
+                        bar.style.opacity = '0.5';
+                    }
+                }
             }
         });
 
@@ -974,8 +986,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const downloadUrl = await fetchDownloadUrlFromNexus(modId, fileId, nxmQueryParams);
             if (!downloadUrl) throw new Error("Could not retrieve download URL. (Check API Key or Premium Status)");
 
-            updateStatus('Downloading...', 'progress');
-            const downloadResult = await invoke('download_mod_archive', { downloadUrl, fileName });
+            updateStatus(i18n.get('statusDownloading'), 'progress');
+
+            const downloadResult = await invoke('download_mod_archive', {
+                downloadUrl,
+                fileName,
+                downloadId
+            });
 
             const item = downloadHistory.find(d => d.id === downloadId);
             if (item) {
@@ -1437,6 +1454,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const itemData of downloadHistory) {
             const newItem = template.content.cloneNode(true).firstElementChild;
+
+            const progressBar = document.createElement('div');
+            progressBar.className = 'download-progress-bar';
+            newItem.appendChild(progressBar);
+
             newItem.dataset.downloadId = itemData.id;
 
             if ((itemData.statusClass === 'success' || itemData.statusClass === 'cancelled') && itemData.archivePath) {
