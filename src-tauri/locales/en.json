@@ -162,5 +162,9 @@
   "cleanupTitle": "Cleanup Result",
   "cleanStagingSuccess": "Cleaned {{count}} temp files.",
   "cleanStagingEmpty": "No temp files found.",
-  "cleanStagingError": "Failed to clean temp files"
+  "cleanStagingError": "Failed to clean temp files",
+  "folderConflictTitle": "Folder Name Conflict",
+  "folderConflictMsg": "This mod is already installed as '{{oldName}}', but the new file uses the folder name '{{newName}}'.\n\nIs this an Update (Replace) or an Addon (Keep Both)?",
+  "btnReplace": "Replace (Update)",
+  "btnKeepBoth": "Keep Both (Addon)"
 }

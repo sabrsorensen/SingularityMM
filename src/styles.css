@@ -597,7 +597,7 @@ h3,
     color: var(--c-text-primary);
     padding: 4px;
     text-align: center;
-    width: 30px;
+    width: 60px;
     font-family: var(--font-primary);
     font-size: 14px;
 }

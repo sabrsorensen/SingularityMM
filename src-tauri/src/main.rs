@@ -32,6 +32,7 @@ use url::Url;
 use tauri::path::BaseDirectory;
 use std::sync::Mutex;
 use std::io::Write;
+use std::fs::OpenOptions;
 
 // --- STRUCTS ---
 
@@ -169,6 +170,7 @@ struct ProfileSwitchProgress {
     current: usize,
     total: usize,
     current_mod: String,
+    file_progress: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -201,6 +203,14 @@ const CLEAN_MXML_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 static DIR_LOCK: Mutex<()> = Mutex::new(());
 
 // --- HELPER FUNCTIONS ---
+fn get_log_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    if !app_data.exists() {
+        fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
+    }
+    Ok(app_data.join("singularity.log"))
+}
+
 fn scan_for_installable_mods(dir: &Path, base_dir: &Path) -> Vec<String> {
     let mut candidates = Vec::new();
     
@@ -1683,6 +1693,20 @@ fn save_active_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
     let mxml_backup_path = profiles_dir.join(format!("{}.mxml", profile_name));
     let downloads_dir = get_downloads_dir(&app)?;
     
+    // --- OPTIMIZATION: Load existing profile to cache hashes ---
+    let mut hash_cache: HashMap<String, String> = HashMap::new();
+    if json_path.exists() {
+        if let Ok(content) = fs::read_to_string(&json_path) {
+            if let Ok(old_data) = serde_json::from_str::<ModProfileData>(&content) {
+                for entry in old_data.mods {
+                    // Cache the hash for this filename
+                    hash_cache.insert(entry.filename, entry.hash);
+                }
+            }
+        }
+    }
+    // -----------------------------------------------------------
+
     // Map: ZipFilename -> List of Installed Folder Names
     let mut profile_map: HashMap<String, Vec<String>> = HashMap::new();
     
@@ -1696,7 +1720,6 @@ fn save_active_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
                     
                     if let Ok(content) = fs::read_to_string(&info_path) {
                         if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                            // If it has installSource, group it. 
                             if let Some(source) = json.get("installSource").and_then(|s| s.as_str()) {
                                 if !source.is_empty() {
                                     profile_map.entry(source.to_string()).or_default().push(folder_name);
@@ -1718,15 +1741,24 @@ fn save_active_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
     // Convert Map to ProfileModEntry list
     let mut profile_entries = Vec::new();
     for (filename, installed_folders) in profile_map {
-        let archive_path = downloads_dir.join(&filename);
-        let hash = if archive_path.exists() {
-            calculate_file_hash(&archive_path).unwrap_or("HASH_ERROR".to_string())
+        
+        // --- OPTIMIZATION START ---
+        // Check if we already have a hash for this filename in the cache
+        let hash = if let Some(cached_hash) = hash_cache.get(&filename) {
+            // If we have it, skip calculation!
+            cached_hash.clone()
         } else {
-            "MISSING_FILE".to_string()
+            // Only calculate if new or untracked in previous save
+            let archive_path = downloads_dir.join(&filename);
+            if archive_path.exists() {
+                calculate_file_hash(&archive_path).unwrap_or("HASH_ERROR".to_string())
+            } else {
+                "MISSING_FILE".to_string()
+            }
         };
+        // --- OPTIMIZATION END ---
 
-        // We need one sample mod_info to get modId/version for the profile entry (UI display)
-        // We'll just grab info from the first folder in the list
+        // Sample metadata (same as before)
         let mut p_mod_id = None;
         let mut p_file_id = None;
         let mut p_version = None;
@@ -1750,7 +1782,7 @@ fn save_active_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
             mod_id: p_mod_id,
             file_id: p_file_id,
             version: p_version,
-            installed_options: Some(installed_folders), // Save specific folders
+            installed_options: Some(installed_folders), 
         });
     }
 
@@ -1781,7 +1813,6 @@ async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
     let game_path = find_game_path().ok_or("Game path not found")?;
     let mods_dir = game_path.join("GAMEDATA/MODS");
     
-    // Clear existing mods
     if mods_dir.exists() {
         for entry in fs::read_dir(&mods_dir).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
@@ -1792,7 +1823,6 @@ async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
         }
     }
 
-    // Restore MXML
     let live_mxml = game_path.join("Binaries").join("SETTINGS").join("GCMODSETTINGS.MXML");
     println!("Applying Profile: {}", profile_name);
 
@@ -1809,32 +1839,45 @@ async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
     
     for (i, entry) in profile_data.mods.iter().enumerate() {
         let archive_path = downloads_dir.join(&entry.filename);
+        let current_idx = i + 1;
         
+        // Emit initial 0% for this file
         app.emit("profile-progress", ProfileSwitchProgress {
-            current: i + 1,
+            current: current_idx,
             total: total_mods,
-            current_mod: entry.filename.clone()
+            current_mod: entry.filename.clone(),
+            file_progress: 0
         }).unwrap();
 
         if archive_path.exists() {
-             match extract_archive_to_temp(&archive_path, &mods_dir, |_| {}) {
+             // Clone for closure
+             let app_handle = app.clone();
+             let mod_name_clone = entry.filename.clone();
+             
+             // CALLBACK: Update UI during extraction
+             let progress_cb = move |pct: u64| {
+                 let _ = app_handle.emit("profile-progress", ProfileSwitchProgress {
+                    current: current_idx,
+                    total: total_mods,
+                    current_mod: mod_name_clone.clone(),
+                    file_progress: pct
+                });
+             };
+
+             match extract_archive_to_temp(&archive_path, &mods_dir, progress_cb) { 
                 Ok(temp_path) => {
                      let has_specific_options = entry.installed_options.as_ref().map(|o| !o.is_empty()).unwrap_or(false);
 
                      if has_specific_options {
-                        // Modern Profile: Install specific folders
                         if let Some(options) = &entry.installed_options {
                             for target_folder_name in options {
                                 if let Some(source_path) = find_folder_in_tree(&temp_path, target_folder_name) {
                                     let dest = mods_dir.join(target_folder_name);
                                     if dest.exists() { fs::remove_dir_all(&dest).ok(); }
-                                    
                                     if let Err(e) = fs::rename(&source_path, &dest) {
                                         println!("Failed to move {}: {}", target_folder_name, e);
                                         continue;
                                     }
-
-                                    // Restore mod_info
                                     let info_path = dest.join("mod_info.json");
                                     let info_json = serde_json::json!({
                                         "modId": entry.mod_id,
@@ -1849,33 +1892,23 @@ async fn apply_profile(app: AppHandle, profile_name: String) -> Result<(), Strin
                             }
                         }
                      } else {
-                        // Legacy Profile: Install All Top-Level Folders
                         for fs_entry in fs::read_dir(&temp_path).map_err(|e| e.to_string())? {
                             let fs_entry = fs_entry.map_err(|e| e.to_string())?;
                             let folder_name = fs_entry.file_name().to_string_lossy().into_owned();
-                            
                             let dest = mods_dir.join(&folder_name);
                             if dest.exists() { fs::remove_dir_all(&dest).ok(); }
-                            
-                            if let Err(e) = fs::rename(fs_entry.path(), &dest) {
-                                println!("Failed to move {}: {}", folder_name, e);
-                                continue;
-                            }
+                            fs::rename(fs_entry.path(), &dest).ok();
 
-                            // --- FIX ADDED HERE ---
-                            // We MUST write the mod_info.json here too, or legacy mods 
-                            // will look "Untracked" after applying the profile.
                             let info_path = dest.join("mod_info.json");
                             let info_json = serde_json::json!({
                                 "modId": entry.mod_id,
                                 "fileId": entry.file_id,
                                 "version": entry.version,
-                                "installSource": entry.filename // Crucial!
+                                "installSource": entry.filename
                             });
                             if let Ok(json_str) = serde_json::to_string_pretty(&info_json) {
                                 fs::write(info_path, json_str).ok();
                             }
-                            // ----------------------
                         }
                      }
                      let _ = fs::remove_dir_all(temp_path);
@@ -2326,6 +2359,25 @@ async fn run_legacy_migration(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn write_to_log(app: AppHandle, level: String, message: String) -> Result<(), String> {
+    let log_path = get_log_file_path(&app)?;
+    
+    // Format: [2023-10-27 10:00:00] [ERROR] Some message
+    let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let log_entry = format!("[{}] [{}] {}\n", timestamp, level, message);
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .map_err(|e| e.to_string())?;
+
+    file.write_all(log_entry.as_bytes()).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
 // --- MAIN FUNCTION ---
 fn main() {    
     tauri::Builder::default()
@@ -2457,7 +2509,8 @@ fn main() {
             clean_staging_folder,
             finalize_installation,
             get_staging_contents,
-            run_legacy_migration
+            run_legacy_migration,
+            write_to_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

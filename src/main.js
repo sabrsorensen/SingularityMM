@@ -147,8 +147,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Core Application Logic ---
 
+    // --- LOGGING HELPER ---
+    async function logAppEvent(message, level = 'INFO') {
+        try {
+            // Print to DevTools console for dev convenience
+            if (level === 'ERROR') console.error(message);
+            else console.log(message);
+
+            // Write to disk
+            await invoke('write_to_log', { level, message: String(message) });
+        } catch (e) {
+            console.error("Failed to write log:", e);
+        }
+    }
+
+    // Log startup
+    logAppEvent("Singularity Manager Started", "INFO");
+
     // --- CUSTOM DIALOG HELPERS ---
-    // --- CUSTOM PROMPT HELPER ---
     const inputModal = document.getElementById('inputDialogModal');
     const inputTitle = document.getElementById('inputDialogTitle');
     const inputMessage = document.getElementById('inputDialogMessage');
@@ -1120,7 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processInstallAnalysis(analysis, item, isUpdate) {
         let oldArchiveToDelete = null;
 
-        // --- Handle Conflicts ---
+        // 1. Handle Direct Conflicts (Same Folder Name)
         if (analysis.conflicts && analysis.conflicts.length > 0) {
             for (const conflict of analysis.conflicts) {
                 const oldItemIndex = downloadHistory.findIndex(d => d.modFolderName === conflict.old_mod_folder_name);
@@ -1168,58 +1184,89 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // --- Handle New Installations ---
+        // 2. Handle New Installations (Different Folder Name)
         if (analysis.successes && analysis.successes.length > 0) {
             const processedNames = new Set();
 
-            // --- FIX: Detect Folder Renames during Update ---
-            let oldFolderName = null;
-            // 1. Find if this Mod ID is already installed under a different name
-            if (item.modId) {
-                for (const [fName, data] of appState.modDataCache.entries()) {
-                    // Compare Mod IDs loosely (string/number)
-                    if (String(data.local_info?.mod_id) === String(item.modId)) {
-                        oldFolderName = fName;
-                        break;
-                    }
-                }
-            }
-
-            let hasRenamedOldMod = false;
+            // Flag to ensure we only trigger the prompt once per batch
+            let hasPromptedForRename = false;
 
             for (const mod of analysis.successes) {
                 if (processedNames.has(mod.name)) continue;
 
                 let isRenamedEntry = false;
 
-                // 2. If we found an old folder, and it's not the same as the new one,
-                // and we haven't already renamed it in this batch: Treat as Upgrade.
-                if (oldFolderName && oldFolderName !== mod.name && !hasRenamedOldMod) {
-                    console.log(`Detected Mod Update with Folder Rename: ${oldFolderName} -> ${mod.name}`);
-                    try {
-                        // A. Rename the entry in XML to preserve Priority/Enabled status
-                        const updatedXmlContent = await invoke('update_mod_name_in_xml', {
-                            oldName: oldFolderName.toUpperCase(),
-                            newName: mod.name.toUpperCase()
-                        });
-                        await loadXmlContent(updatedXmlContent, appState.currentFilePath);
+                // --- INTELLIGENT RENAME DETECTION ---
+                // We look for an existing mod with the SAME ID but DIFFERENT Name.
+                // If we find multiple (Main + Addon), we pick the one with the most similar name.
+                let oldFolderName = null;
 
-                        // B. Physically delete the old folder (New one is already extracted by Rust)
-                        await invoke('delete_mod', { modName: oldFolderName });
+                if (item.modId && !hasPromptedForRename) {
+                    let bestMatch = null;
+                    let bestMatchScore = -1;
 
-                        isRenamedEntry = true;
-                        hasRenamedOldMod = true;
-                    } catch (e) {
-                        console.warn("Failed to process folder rename:", e);
+                    for (const [fName, data] of appState.modDataCache.entries()) {
+                        // Match ID
+                        if (String(data.local_info?.mod_id) === String(item.modId)) {
+                            // Match Name Similarity (Common Prefix Length)
+                            // e.g. "MyMod_v2" matches "MyMod_v1" (score 7) better than "MyMod_Addon" (score 6)
+                            let score = 0;
+                            const minLen = Math.min(fName.length, mod.name.length);
+                            for (let i = 0; i < minLen; i++) {
+                                if (fName[i] === mod.name[i]) score++;
+                                else break;
+                            }
+
+                            // Prefer higher score. 
+                            if (score > bestMatchScore) {
+                                bestMatchScore = score;
+                                bestMatch = fName;
+                            }
+                        }
                     }
+                    oldFolderName = bestMatch;
+                }
+                // ------------------------------------
+
+                // If we found a candidate, and it's different from the new one
+                if (oldFolderName && oldFolderName !== mod.name) {
+
+                    const shouldReplace = await window.customConfirm(
+                        i18n.get('folderConflictMsg', {
+                            oldName: oldFolderName,
+                            newName: mod.name
+                        }),
+                        i18n.get('folderConflictTitle'),
+                        i18n.get('btnReplace'),
+                        i18n.get('btnKeepBoth')
+                    );
+
+                    if (shouldReplace) {
+                        console.log(`User chose to replace: ${oldFolderName} -> ${mod.name}`);
+                        try {
+                            const updatedXmlContent = await invoke('update_mod_name_in_xml', {
+                                oldName: oldFolderName.toUpperCase(),
+                                newName: mod.name.toUpperCase()
+                            });
+                            await loadXmlContent(updatedXmlContent, appState.currentFilePath);
+
+                            await invoke('delete_mod', { modName: oldFolderName });
+
+                            isRenamedEntry = true;
+                        } catch (e) {
+                            console.warn("Failed to process folder rename:", e);
+                        }
+                    } else {
+                        console.log("User chose to keep both.");
+                    }
+
+                    hasPromptedForRename = true;
                 }
 
-                // 3. If it wasn't a rename (or is a 2nd folder in a multi-folder mod), add as new.
                 if (!isRenamedEntry) {
                     addNewModToXml(mod.name);
                 }
 
-                // Register info
                 await invoke('ensure_mod_info', {
                     modFolderName: mod.name,
                     modId: item.modId || "",
@@ -1232,7 +1279,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 processedNames.add(mod.name);
             }
 
-            // Set history to track the first valid folder
             item.modFolderName = analysis.successes[0].name;
         }
 
@@ -1318,6 +1364,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
         } catch (error) {
+            const errMsg = `Installation failed for ${item.fileName}: ${error}`;
+            logAppEvent(errMsg, 'ERROR');
+
             console.error("Installation process failed:", error);
             updateStatus(`${i18n.get('installFailedTitle')}: ${error}`, 'error');
             await saveDownloadHistory(downloadHistory);
@@ -2957,6 +3006,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                 } catch (error) {
+                    const errMsg = `Drag/Drop install failed for ${fileName}: ${error}`;
+                    logAppEvent(errMsg, 'ERROR');
                     console.error(`Error installing ${fileName}:`, error);
 
                     newItem.statusText = "Error";
@@ -3561,15 +3612,34 @@ document.addEventListener('DOMContentLoaded', () => {
         // Listen for progress from Rust
         const unlisten = await listen('profile-progress', (event) => {
             const p = event.payload;
-            const pct = (p.current / p.total) * 100;
-            profileProgressBar.style.width = `${pct}%`;
+
+            // Math: ((Current Mod Index - 1) * 100 + Current File %) / Total Mods
+            // This gives a smooth 0-100% value for the entire process
+            const totalPercentage = ((p.current - 1) * 100 + p.file_progress) / p.total;
+
+            profileProgressBar.style.width = `${totalPercentage}%`;
             profileProgressText.textContent = `Installing ${p.current}/${p.total}: ${p.current_mod}`;
 
-            // Simple time estimation
-            const elapsed = (Date.now() - start) / 1000;
-            const rate = p.current / elapsed; // mods per second
-            const remaining = (p.total - p.current) / rate;
-            profileTimeEst.textContent = `Estimated time remaining: ${Math.ceil(remaining)}s`;
+            // --- Improved Time Estimation ---
+            const elapsedSeconds = (Date.now() - start) / 1000;
+
+            // Don't estimate in the first second to avoid "Infinity" or "0s" spikes
+            if (elapsedSeconds > 1 && totalPercentage > 0) {
+                // Calculate speed: Percent per Second
+                const rate = totalPercentage / elapsedSeconds;
+
+                const remainingPercent = 100 - totalPercentage;
+                const remainingSeconds = remainingPercent / rate;
+
+                if (remainingSeconds < 60) {
+                    profileTimeEst.textContent = `Estimated time remaining: ${Math.ceil(remainingSeconds)}s`;
+                } else {
+                    const mins = Math.ceil(remainingSeconds / 60);
+                    profileTimeEst.textContent = `Estimated time remaining: ~${mins} min`;
+                }
+            } else {
+                profileTimeEst.textContent = i18n.get('calculatingTimeText');
+            }
         });
 
         try {

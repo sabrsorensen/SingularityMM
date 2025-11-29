@@ -162,5 +162,9 @@
     "cleanupTitle": "Resultado da Limpeza",
     "cleanStagingSuccess": "{{count}} arquivos temporários removidos.",
     "cleanStagingEmpty": "Pasta sem arquivos temporários.",
-    "cleanStagingError": "Falha ao limpar arquivos temporários"
+    "cleanStagingError": "Falha ao limpar arquivos temporários",
+    "folderConflictTitle": "Conflito de Nomes de Pastas",
+    "folderConflictMsg": "Esse mod já está instalado como '{{oldName}}', mas o novo arquivo usa o nome '{{newName}}'.\n\nIsso é um Update (Substituir) ou um Addon (Manter Ambos)?",
+    "btnReplace": "Substituir (Update)",
+    "btnKeepBoth": "Manter Ambos (Addon)"
 }
