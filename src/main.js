@@ -2779,10 +2779,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const cleanStagingBtn = document.getElementById('cleanStagingBtn');
     cleanStagingBtn.addEventListener('click', async () => {
         try {
-            const resultMsg = await invoke('clean_staging_folder');
-            await window.customAlert(resultMsg, "Cleanup Result");
+            const count = await invoke('clean_staging_folder');
+
+            if (count > 0) {
+                await window.customAlert(
+                    i18n.get('cleanStagingSuccess', { count: count }),
+                    i18n.get('cleanupTitle')
+                );
+            } else {
+                await window.customAlert(
+                    i18n.get('cleanStagingEmpty'),
+                    i18n.get('cleanupTitle')
+                );
+            }
         } catch (e) {
-            await window.customAlert(`Failed to clean staging: ${e}`, "Error");
+            await window.customAlert(`${i18n.get('cleanStagingError')}: ${e}`, "Error");
         }
     });
 

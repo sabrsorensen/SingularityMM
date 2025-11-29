@@ -2169,22 +2169,20 @@ fn open_special_folder(app: AppHandle, folder_type: String) -> Result<(), String
 }
 
 #[tauri::command]
-fn clean_staging_folder(app: AppHandle) -> Result<String, String> {
+fn clean_staging_folder(app: AppHandle) -> Result<usize, String> {
     let staging_dir = get_staging_dir(&app)?;
     
     if staging_dir.exists() {
-        // Read directory to count items before deleting (for UI feedback)
         let count = fs::read_dir(&staging_dir).map_err(|e| e.to_string())?.count();
         
         if count > 0 {
-            // We just delete the whole staging folder and recreate it
             fs::remove_dir_all(&staging_dir).map_err(|e| e.to_string())?;
             fs::create_dir_all(&staging_dir).map_err(|e| e.to_string())?;
-            return Ok(format!("Cleaned {} items from staging area.", count));
+            return Ok(count); // Return the number of deleted items
         }
     }
     
-    Ok("Staging area is already empty.".to_string())
+    Ok(0) // Return 0 if empty
 }
 
 #[tauri::command]

@@ -158,5 +158,9 @@
     "promptForNexusLink": "O mod '{{modName}}' não está vinculado ao Nexus Mods para verificação de atualização. Para vinculá-lo, cole a URL completa do Nexus Mods para este mod abaixo:",
     "linkCancelled": "A vinculação para '{{modName}}' foi cancelada. Você pode verificar atualizações manualmente.",
     "linkSuccess": "'{{modName}}' vinculado com sucesso! A verificação de atualizações está ativada agora.",
-    "linkInvalid": "A URL fornecida para '{{modName}}' não parece ser um link válido do Nexus Mods para No Man's Sky."
+    "linkInvalid": "A URL fornecida para '{{modName}}' não parece ser um link válido do Nexus Mods para No Man's Sky.",
+    "cleanupTitle": "Resultado da Limpeza",
+    "cleanStagingSuccess": "{{count}} arquivos temporários removidos.",
+    "cleanStagingEmpty": "Pasta sem arquivos temporários.",
+    "cleanStagingError": "Falha ao limpar arquivos temporários"
 }

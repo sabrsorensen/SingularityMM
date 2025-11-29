@@ -158,5 +158,9 @@
   "promptForNexusLink": "The mod '{{modName}}' is not linked to Nexus Mods for update check. To link it, please paste the full Nexus Mods URL for this mod below:",
   "linkCancelled": "Linking for '{{modName}}' was cancelled. You can check for updates manually.",
   "linkSuccess": "Successfully linked '{{modName}}'! Update checking is now enabled.",
-  "linkInvalid": "The URL you provided for '{{modName}}' does not appear to be a valid No Man's Sky Nexus Mods link."
+  "linkInvalid": "The URL you provided for '{{modName}}' does not appear to be a valid No Man's Sky Nexus Mods link.",
+  "cleanupTitle": "Cleanup Result",
+  "cleanStagingSuccess": "Cleaned {{count}} temp files.",
+  "cleanStagingEmpty": "No temp files found.",
+  "cleanStagingError": "Failed to clean temp files"
 }
