@@ -589,8 +589,6 @@ h3,
 }
 
 .mod-row input[type="text"] {
-    /* background-color: rgba(74, 74, 74, 0.9); */
-    /* border: 1px solid var(--c-accent-primary); */
     background: transparent;
     border-radius: 4px;
     border: none;
@@ -1221,6 +1219,12 @@ label.switch:has(input:checked)::before {
 
 .download-item-status.status-cancelled {
     color: var(--c-danger);
+    font-weight: bold;
+}
+
+.download-item-status.status-unpacked {
+    color: #00d4ff;
+    /* Bright Cyan */
     font-weight: bold;
 }
 

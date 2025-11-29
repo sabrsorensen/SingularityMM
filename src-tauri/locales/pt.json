@@ -49,6 +49,7 @@
     "warningsLabel": "Avisos",
     "resetWarningsBtn": "Resetar Avisos Ocultos",
     "settingsDownloadsLabel": "Pasta de Downloads",
+    "settingsLibraryLabel": "Pasta da Biblioteca de Mods",
     "changeBtn": "Alterar",
     "__comment_TROUBLESHOOT": "=== TROUBLESHOOT SECTION ===",
     "modManagerDownloadsTitle": "DOWNLOADS DO GERENCIADOR",
@@ -90,6 +91,7 @@
     "statusUpdating": "Atualizando...",
     "statusInstalled": "Instalado",
     "statusDownloaded": "Baixado",
+    "statusUnpacked": "Desinstalado",
     "updateModalTitle": "ATUALIZAÇÕES DE MODS",
     "btnVisitNexus": "Visitar Nexus Mods",
     "updateChecking": "Verificando atualizações...",
@@ -168,7 +170,7 @@
     "btnReplace": "Substituir (Update)",
     "btnKeepBoth": "Manter Ambos (Addon)",
     "driveCheckTitle": "Hardlink",
-    "driveCheckMsg": "Seu jogo está no drive {{gameDrive}}:, mas sua Mod Library está no {{libDrive}}:. \n\nPara fazer uso do Hardlink na instalação de mods, nós recomendamos mover sua Library para o drive {{gameDrive}}:.\n\nVocê quer escolher uma pasta no {{gameDrive}}: agora?",
+    "driveCheckMsg": "Seu jogo está no drive {{gameDrive}}:, mas sua Biblioteca de Mods está no {{libDrive}}:. \n\nPara fazer uso do Hardlink na instalação de mods, nós recomendamos mover sua Biblioteca para o drive {{gameDrive}}:.\n\nVocê quer escolher uma pasta no {{gameDrive}}: agora?",
     "btnMoveNow": "Mover Agora",
     "btnDontAskAgain": "Não perguntar novamente"
 }

@@ -2510,6 +2510,21 @@ fn get_library_path(app: AppHandle) -> Result<String, String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+#[tauri::command]
+fn check_library_existence(app: AppHandle, filenames: Vec<String>) -> Result<HashMap<String, bool>, String> {
+    let library_dir = get_library_dir(&app)?;
+    let mut results = HashMap::new();
+
+    for name in filenames {
+        // Recreate the folder naming logic: "Mod.zip" -> "Mod.zip_unpacked"
+        let folder_name = format!("{}_unpacked", name);
+        let path = library_dir.join(folder_name);
+        results.insert(name, path.exists());
+    }
+
+    Ok(results)
+}
+
 // --- MAIN FUNCTION ---
 fn main() {    
     tauri::Builder::default()
@@ -2645,7 +2660,8 @@ fn main() {
             write_to_log,
             set_library_path,
             get_library_path,
-            delete_library_folder
+            delete_library_folder,
+            check_library_existence
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

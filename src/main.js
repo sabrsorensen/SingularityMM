@@ -532,18 +532,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initializeApp = async () => {
         const savedLang = localStorage.getItem('selectedLanguage') || 'en';
-        languageSelector.value = savedLang;
-        await i18n.loadLanguage(savedLang);
-        await loadDownloadHistory();
 
-        filePathLabel.textContent = "Checking for legacy data...";
-        try {
-            await invoke('run_legacy_migration');
-        } catch (e) {
-            console.error("Migration warning:", e);
-        }
-        filePathLabel.textContent = i18n.get('noFileLoaded'); // Restore default
+        // --- 1. START TASKS IN PARALLEL ---
 
+        // Network Tasks (Background - Don't await immediately)
+        const loginPromise = validateLoginState();
+        const curatedDataPromise = fetchCuratedData();
+
+        // Local I/O Tasks (Critical - Await group)
+        const langPromise = i18n.loadLanguage(savedLang);
+        const historyPromise = loadDownloadHistory();
+
+        // Migration (Must finish before reading XML to ensure data integrity)
+        const migrationPromise = invoke('run_legacy_migration').catch(e => console.error("Migration error:", e));
+
+        // Game Detection
+        const gameDetectPromise = invoke('detect_game_installation');
+
+        // --- 2. AWAIT CRITICAL SETUP ---
+        // We block UI rendering only for these essentials
+        await Promise.all([langPromise, historyPromise, migrationPromise]);
+
+        // --- 3. INITIALIZE UI COMPONENTS ---
+
+        // Set up Sliders
         const savedPadding = localStorage.getItem('modRowPadding') || '5';
         document.documentElement.style.setProperty('--mod-row-vertical-padding', `${savedPadding}px`);
         rowPaddingSlider.value = savedPadding;
@@ -558,60 +570,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const savedModsPerPage = localStorage.getItem('modsPerPage') || '20';
         appState.modsPerPage = parseInt(savedModsPerPage, 10);
-
-        const modsPerPageSlider = document.getElementById('modsPerPageSlider');
-        const modsPerPageValue = document.getElementById('modsPerPageValue');
         if (modsPerPageSlider) {
             modsPerPageSlider.value = appState.modsPerPage;
             modsPerPageValue.textContent = appState.modsPerPage;
             updateSliderFill(modsPerPageSlider);
         }
 
-        // Check for untracked/manual mods
-        const suppressWarning = localStorage.getItem('suppressUntrackedWarning') === 'true';
+        // --- 4. HANDLE GAME PATH ---
+        const gamePaths = await gameDetectPromise;
 
-        if (!suppressWarning) {
-            const hasUntracked = await invoke('check_for_untracked_mods');
-
-            if (hasUntracked) {
-                // TRUE = "OK" (Acknowledged, keep showing)
-                // FALSE = "Don't Show Again" (Suppress future warnings)
-                const keepShowing = await window.customConfirm(
-                    i18n.get('untrackedModsMsg'),       // Message
-                    i18n.get('warningTitle'),           // Title
-                    i18n.get('okBtn'),                  // "OK" (Reuse existing key)
-                    i18n.get('dontShowAgainBtn')        // "Don't Show Again"
-                );
-
-                // If they clicked "Don't Show Again" (which returns false), save the preference
-                if (keepShowing === false) {
-                    localStorage.setItem('suppressUntrackedWarning', 'true');
-                }
-            }
-        }
-
-        // 1. Ensure Default Profile Exists
-        const profiles = await invoke('list_profiles');
-
-        // We check if "Default.json" physically exists
-        const activeProfileName = localStorage.getItem('activeProfile') || 'Default';
-
-        if (activeProfileName === 'Default') {
-            // If is on Default, ensure it's saved to disk to not lose current state
-            // BUT only do this if it has valid mods to save.
-
-            const installedData = getDetailedInstalledMods();
-
-            // Save the current state as Default immediately
-            // This creates the file so the user doesn't lose valid mods on switch
-            await invoke('save_active_profile', {
-                profileName: 'Default',
-                mods: installedData
-            });
-        }
-
-        // --- GAME DETECTION ---
-        const gamePaths = await invoke('detect_game_installation');
         if (gamePaths) {
             console.log(`Detected ${gamePaths.version_type} version of No Man's Sky.`);
 
@@ -619,23 +586,19 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.settingsPath = gamePaths.settings_root_path;
             appState.versionType = gamePaths.version_type;
 
-            // --- LAUNCH BUTTON UI ---
+            // UI Updates for Game Found
             const launchBtn = document.getElementById('launchGameBtn');
             const launchIcon = document.getElementById('launchIcon');
 
             launchBtn.classList.remove('disabled');
             launchBtn.dataset.platform = appState.versionType;
 
-            // Set the correct icon
-            if (appState.versionType === 'Steam') {
-                launchIcon.src = iconSteam;
-            } else if (appState.versionType === 'GOG') {
-                launchIcon.src = iconGog;
-            } else if (appState.versionType === 'GamePass') {
-                launchIcon.src = iconXbox;
-            }
+            if (appState.versionType === 'Steam') launchIcon.src = iconSteam;
+            else if (appState.versionType === 'GOG') launchIcon.src = iconGog;
+            else if (appState.versionType === 'GamePass') launchIcon.src = iconXbox;
         }
 
+        // Enable/Disable UI based on Game Path
         const hasGamePath = !!appState.gamePath;
         openModsFolderBtn.disabled = !hasGamePath;
         settingsBtn.classList.toggle('disabled', !hasGamePath);
@@ -645,36 +608,30 @@ document.addEventListener('DOMContentLoaded', () => {
         dropZone.classList.toggle('hidden', !hasGamePath);
 
         if (!hasGamePath) {
-            const title = "Could not find NMS installation path";
-            openModsFolderBtn.title = title;
-            settingsBtn.title = title;
-            enableAllBtn.title = title;
-            disableAllBtn.title = title;
-            // Do not proceed further if no game path is found
+            // If no game, show title error (visual feedback)
+            const bannerText = document.querySelector('#globalBanner .banner-text');
+            if (bannerText) bannerText.textContent = "Game Not Found";
         }
 
+        // --- 5. LOAD MOD LIST (XML) ---
         if (hasGamePath && appState.settingsPath) {
-            enableAllBtn.title = '';
-            disableAllBtn.title = '';
             try {
                 const settingsFilePath = await join(appState.settingsPath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
                 const content = await readTextFile(settingsFilePath);
                 await loadXmlContent(content, settingsFilePath);
             } catch (e) {
-                console.warn("Could not auto-load settings file. It may not exist yet.", e);
+                console.warn("Could not auto-load settings file.", e);
             }
         }
 
-        listen('nxm-link-received', (event) => {
-            handleNxmLink(event.payload);
-        });
+        // --- 6. SETUP LISTENERS ---
+        listen('nxm-link-received', (event) => handleNxmLink(event.payload));
 
         listen('install-progress', (event) => {
             const payload = event.payload;
             const item = downloadHistory.find(d => d.id === payload.id);
             if (item) {
                 item.statusText = payload.step;
-
                 // Update UI immediately
                 const row = document.querySelector(`.download-item[data-download-id="${payload.id}"]`);
                 if (row) {
@@ -684,9 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const bar = row.querySelector('.download-progress-bar');
                     if (bar && payload.progress !== undefined && payload.progress !== null) {
                         bar.style.width = `${payload.progress}%`;
-                        bar.classList.remove('indeterminate'); // Stop pulsing if we have numbers
+                        bar.classList.remove('indeterminate');
                     } else if (bar) {
-                        // We are analyzing/copying, show full width or pulse
                         bar.style.width = '100%';
                         bar.style.opacity = '0.5';
                     }
@@ -694,57 +650,65 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // --- SMART DRIVE CHECK ---
+        // --- 7. HANDLE BACKGROUND TASKS (UI is already interactive here) ---
+
+        // A. Drive Check (Async Promise Chain)
         if (appState.gamePath) {
-            try {
-                // DEBUG: Clear the suppression flag so we can test
-                localStorage.removeItem('suppressDriveCheck');
-
-                const libPath = await invoke('get_library_path');
-
-                // Helper to extract "C" from "C:\..." or "\\?\C:\..."
+            invoke('get_library_path').then(libPath => {
                 const getDrive = (p) => {
                     if (!p) return null;
-                    const match = p.match(/([a-zA-Z]):/);
-                    return match ? match[1].toUpperCase() : null;
+                    const m = p.match(/([a-zA-Z]):/);
+                    return m ? m[1].toUpperCase() : null;
                 };
 
                 const gameDrive = getDrive(appState.gamePath);
                 const libDrive = getDrive(libPath);
-
-                // LOGGING: Open Console (F12) to see these
-                console.log("--- Drive Check Debug ---");
-                console.log("Raw Game Path:", appState.gamePath);
-                console.log("Raw Lib Path:", libPath);
-                console.log("Detected Game Drive:", gameDrive);
-                console.log("Detected Lib Drive:", libDrive);
-
                 const suppressDriveCheck = localStorage.getItem('suppressDriveCheck') === 'true';
 
                 if (gameDrive && libDrive && gameDrive !== libDrive && !suppressDriveCheck) {
-                    console.log("Drives mismatch! Showing prompt.");
-                    const moveIt = await window.customConfirm(
-                        i18n.get('driveCheckMsg', {
-                            gameDrive: gameDrive,
-                            libDrive: libDrive
-                        }),
+                    window.customConfirm(
+                        i18n.get('driveCheckMsg', { gameDrive, libDrive }),
                         i18n.get('driveCheckTitle'),
                         i18n.get('btnMoveNow'),
                         i18n.get('btnDontAskAgain')
-                    );
-
-                    if (moveIt) {
-                        document.getElementById('changeLibraryDirBtn').click();
-                    } else {
-                        localStorage.setItem('suppressDriveCheck', 'true');
-                    }
-                } else {
-                    console.log("Checks failed or suppressed. Same drive?");
+                    ).then(moveIt => {
+                        if (moveIt) document.getElementById('changeLibraryDirBtn').click();
+                        else localStorage.setItem('suppressDriveCheck', 'true');
+                    });
                 }
-            } catch (e) { console.warn("Drive check failed", e); }
+            }).catch(console.warn);
         }
 
-        loadDataInBackground();
+        // B. Untracked Mods Check (Async Promise Chain)
+        const suppressWarning = localStorage.getItem('suppressUntrackedWarning') === 'true';
+        if (!suppressWarning) {
+            invoke('check_for_untracked_mods').then(hasUntracked => {
+                if (hasUntracked) {
+                    window.customConfirm(
+                        i18n.get('untrackedModsMsg'),
+                        i18n.get('warningTitle'),
+                        i18n.get('okBtn'),
+                        i18n.get('dontShowAgainBtn')
+                    ).then(keepShowing => {
+                        if (keepShowing === false) localStorage.setItem('suppressUntrackedWarning', 'true');
+                        // Re-render list to update red dots based on user choice
+                        renderModList();
+                    });
+                }
+            }).catch(console.warn);
+        }
+
+        // C. Login Result (Updates UI when ready)
+        loginPromise.then(() => {
+            i18n.updateUI(); // Refreshes the "Connected as..." text
+        });
+
+        // D. Curated Data & Updates (Updates UI dots when ready)
+        curatedDataPromise.then(() => {
+            if (appState.gamePath && appState.modDataCache.size > 0) {
+                checkForUpdates(true); // Silent check
+            }
+        });
     };
 
     const loadXmlContent = async (content, path) => {
@@ -1142,7 +1106,12 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`[CONTEXT MENU] Checking condition to show 'Install' button: statusClass === 'success' (${itemData.statusClass === 'success'}), archivePath exists (${!!itemData.archivePath})`);
 
         // Install Button
-        if ((itemData.statusClass === 'success' || itemData.statusClass === 'cancelled' || itemData.statusClass === 'error') && itemData.archivePath) {
+        if ((itemData.statusClass === 'success' ||
+            itemData.statusClass === 'cancelled' ||
+            itemData.statusClass === 'error' ||
+            itemData.statusClass === 'unpacked')
+            && itemData.archivePath) {
+
             const installButton = document.createElement('button');
             installButton.textContent = i18n.get('ctxInstall');
             installButton.className = 'context-menu-item';
@@ -1628,7 +1597,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             newItem.dataset.downloadId = itemData.id;
 
-            if ((itemData.statusClass === 'success' || itemData.statusClass === 'cancelled' || itemData.statusClass === 'error') && itemData.archivePath) {
+            if ((itemData.statusClass === 'success' ||
+                itemData.statusClass === 'cancelled' ||
+                itemData.statusClass === 'error' ||
+                itemData.statusClass === 'unpacked')
+                && itemData.archivePath) {
                 newItem.classList.add('installable');
             }
 
@@ -1650,10 +1623,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusEl.textContent = i18n.get('statusInstalled');
             } else if (itemData.statusClass === 'success') {
                 statusEl.textContent = i18n.get('statusDownloaded');
+            } else if (itemData.statusClass === 'unpacked') {
+                statusEl.textContent = i18n.get('statusUnpacked');
             } else if (itemData.statusClass === 'cancelled') {
                 statusEl.textContent = i18n.get('statusCancelled');
             } else {
-                // For 'progress' or 'error', use the specific text from backend
                 statusEl.textContent = itemData.statusText;
             }
 
@@ -2703,8 +2677,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const deletedItem = downloadHistory.find(item => item.modFolderName && item.modFolderName.toUpperCase() === modName.toUpperCase());
                     if (deletedItem) {
-                        deletedItem.statusText = 'Downloaded';
-                        deletedItem.statusClass = 'success';
+                        deletedItem.statusText = i18n.get('statusUnpacked');
+                        deletedItem.statusClass = 'unpacked';
 
                         const modIdToUpdate = deletedItem.modId;
 
@@ -3799,38 +3773,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function syncDownloadHistoryWithProfile(profileName) {
         try {
-            // 1. Get the list of zips that SHOULD be installed according to the profile
+            // 1. Get Active Mods
             const profileFiles = await invoke('get_profile_mod_list', { profileName });
 
-            // 2. Loop through history and update statuses
-            let changed = false;
-            downloadHistory.forEach(item => {
-                // Check if this item's filename exists in the profile just loaded
-                const shouldBeInstalled = profileFiles.includes(item.fileName);
+            // 2. Get Library Status for ALL items
+            const allFilenames = downloadHistory.map(item => item.fileName).filter(n => n);
+            const libraryMap = await invoke('check_library_existence', { filenames: allFilenames });
 
-                if (shouldBeInstalled) {
-                    if (item.statusClass !== 'installed') {
-                        item.statusText = i18n.get('statusInstalled');
-                        item.statusClass = 'installed';
+            let changed = false;
+
+            downloadHistory.forEach(item => {
+                // Is it currently installed in the game?
+                const isInstalled = profileFiles.includes(item.fileName);
+
+                // Is it sitting unpacked in the library?
+                const isUnpacked = libraryMap[item.fileName];
+
+                let newStatusClass = '';
+                let newStatusText = '';
+
+                if (isInstalled) {
+                    newStatusClass = 'installed';
+                    newStatusText = i18n.get('statusInstalled');
+                } else if (isUnpacked) {
+                    newStatusClass = 'unpacked';
+                    newStatusText = i18n.get('statusUnpacked');
+                } else {
+                    // Only allow reverting to 'success' (Downloaded) if it wasn't Error/Cancelled
+                    // Or if it WAS installed/unpacked and now isn't.
+                    if (item.statusClass === 'installed' || item.statusClass === 'unpacked' || item.statusClass === 'success') {
+                        newStatusClass = 'success';
+                        newStatusText = i18n.get('statusDownloaded');
+                    }
+                }
+
+                // Only apply if changed to avoid overwriting temporary states like 'progress' or 'error'
+                if (newStatusClass && item.statusClass !== newStatusClass) {
+                    // Safety: Don't overwrite an active error/progress unless we are sure
+                    if (item.statusClass !== 'error' && item.statusClass !== 'progress' && item.statusClass !== 'cancelled') {
+                        item.statusClass = newStatusClass;
+                        item.statusText = newStatusText;
                         changed = true;
                     }
-                } else {
-                    // If it was installed but is NOT in this profile, set it to Downloaded
-                    if (item.statusClass === 'installed' || item.statusClass === 'success') {
-                        item.statusText = i18n.get('statusDownloaded');
-                        item.statusClass = 'success';
+                    // Override: If it WAS installed, force update (e.g. user switched profiles)
+                    if (item.statusClass === 'installed' && !isInstalled) {
+                        item.statusClass = isUnpacked ? 'unpacked' : 'success';
+                        item.statusText = isUnpacked ? i18n.get('statusUnpacked') : i18n.get('statusDownloaded');
                         changed = true;
                     }
                 }
             });
 
-            // 3. Save the corrected history
+            // Save the corrected history
             if (changed) {
                 await saveDownloadHistory(downloadHistory);
                 console.log("Download history synchronized with profile.");
             }
 
-            // 4. Also update the Browse Grid cards
+            if (!document.getElementById('downloadHistoryModalOverlay').classList.contains('hidden')) {
+                renderDownloadHistory();
+            }
+
+            // Also update the Browse Grid cards
             if (!browseView.classList.contains('hidden')) {
                 const allCards = browseGridContainer.querySelectorAll('.mod-card');
                 allCards.forEach(card => {
@@ -4209,13 +4213,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             console.log("Starting App Initialization...");
 
-            // 1. Check Login Status & Load API Key
-            await validateLoginState();
-
-            // 2. Initialize Main App Logic
+            // 1. Initialize App (Handles Login, Language, History, and Migration in parallel)
             await initializeApp();
 
-            // 3. Initialize Profile System
+            // 2. Initialize Profile System
             await refreshProfileList();
 
             const savedProfile = localStorage.getItem('activeProfile') || 'Default';
@@ -4234,7 +4235,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateApplyButtonVisibility();
 
-            // 4. Initialize Drag & Drop
+            // 3. Initialize Drag & Drop
             await setupDragAndDrop();
 
             console.log("Initialization Complete.");
