@@ -13,6 +13,7 @@
     "renameBtn": "Renomear",
     "deleteBtn": "Excluir",
     "selectBtn": "Selecionar",
+
     "__comment_MY_MODS": "=== MY MODS TAB ===",
     "loadFileBtn": "Carregar GCMODSETTINGS",
     "noFileLoaded": "Nenhum arquivo carregado.",
@@ -34,6 +35,7 @@
     "noDescription": "Nenhuma descrição fornecida.",
     "noLocalInfo": "Nenhum arquivo de informações do mod encontrado.",
     "untrackedModTooltip": "Mod Não Rastreado (Instalado Manualmente)",
+
     "__comment_SETTINGS": "=== SETTINGS MODAL ===",
     "settingsModalTitle": "CONFIGURAÇÕES",
     "settingsModalCloseBtn": "Fechar",
@@ -53,6 +55,7 @@
     "changeBtn": "Alterar",
     "nxmSetSuccess": "Definido com Sucesso!",
     "nxmRemovedSuccess": "Removido com Sucesso.",
+
     "__comment_TROUBLESHOOT": "=== TROUBLESHOOT SECTION ===",
     "modManagerDownloadsTitle": "DOWNLOADS DO GERENCIADOR",
     "modManagerDownloadsDesc": "Definir o Singularity como o aplicativo padrão para links (nxm://).",
@@ -63,6 +66,7 @@
     "modalDeleteBtn": "Excluir GCMODSETTINGS.MXML",
     "cleanStagingDesc": "Limpa pastas temporárias deixadas pelo processo de instalação se não tiverem sido excluídas automaticamente.",
     "cleanStagingBtn": "Limpar Pastas Temporárias",
+
     "__comment_PROFILES": "=== PROFILES ===",
     "profileHeader": "PERFIL",
     "applyProfileTooltip": "Aplicar Alteração de Perfil",
@@ -81,6 +85,7 @@
     "cannotRenameDefault": "Não é possível renomear o perfil Padrão.",
     "cannotDeleteDefault": "Não é possível excluir o perfil Padrão.",
     "linkModTitle": "Vincular Mod",
+
     "__comment_DOWNLOADS": "=== DOWNLOADS & UPDATES ===",
     "downloadHistoryTitle": "DOWNLOADS",
     "openDownloadsFolderBtn": "ABRIR PASTA DE DOWNLOADS",
@@ -107,6 +112,7 @@
     "statusCancelled": "Cancelado",
     "statusDownloading": "Baixando...",
     "browseTotalMods": "MODS: {{count}}",
+
     "__comment_CONTEXT": "=== CONTEXT MENUS ===",
     "ctxInstall": "Instalar",
     "ctxVisitNexus": "Visitar Nexus Mods",
@@ -118,6 +124,7 @@
     "priorityModalTitle": "Alterar Prioridade",
     "priorityModalTitleWithMod": "Alterar Prioridade: {{modName}}",
     "priorityModalDesc": "Digite um novo número de prioridade entre 0 e {{max}}.",
+    
     "__comment_ALERTS": "=== ALERTS & ERRORS ===",
     "warningTitle": "Aviso",
     "untrackedModsMsg": "AVISO: Mods não Rastreados Detectados!\n\nVocê tem mods na sua pasta que não foram instalados através deste Gerenciador.\n\nEsses arquivos NÃO são rastreados pelo sistema de Perfis. Se você trocar de perfil, esses arquivos podem ser excluídos ou causar conflitos.\n\nPara corrigir isso, exclua-os da pasta e reinstale-os arrastando seus arquivos .zip para o Gerenciador.",

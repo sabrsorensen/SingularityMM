@@ -13,6 +13,7 @@
   "renameBtn": "Rename",
   "deleteBtn": "Delete",
   "selectBtn": "Select",
+
   "__comment_MY_MODS": "=== MY MODS TAB ===",
   "loadFileBtn": "Load GCMODSETTINGS",
   "noFileLoaded": "No file loaded.",
@@ -34,6 +35,7 @@
   "noDescription": "No description provided.",
   "noLocalInfo": "No local mod info file found.",
   "untrackedModTooltip": "Untracked Mod (Manually Installed)",
+
   "__comment_SETTINGS": "=== SETTINGS MODAL ===",
   "settingsModalTitle": "SETTINGS",
   "settingsModalCloseBtn": "Close",
@@ -53,6 +55,7 @@
   "changeBtn": "Change",
   "nxmSetSuccess": "Successfully set!",
   "nxmRemovedSuccess": "Successfully removed.",
+
   "__comment_TROUBLESHOOT": "=== TROUBLESHOOT SECTION ===",
   "modManagerDownloadsTitle": "MOD MANAGER DOWNLOADS",
   "modManagerDownloadsDesc": "Set Singularity as the default application for (nxm://) links.",
@@ -63,6 +66,7 @@
   "modalDeleteBtn": "Delete GCMODSETTINGS.MXML",
   "cleanStagingDesc": "Cleans temporary folders left over by the installation process if they didn't get deleted automatically.",
   "cleanStagingBtn": "Clean Temp Folders",
+
   "__comment_PROFILES": "=== PROFILES ===",
   "profileHeader": "PROFILE",
   "applyProfileTooltip": "Apply Profile Change",
@@ -81,6 +85,7 @@
   "cannotRenameDefault": "Cannot rename Default profile.",
   "cannotDeleteDefault": "Cannot delete Default profile.",
   "linkModTitle": "Link Mod",
+
   "__comment_DOWNLOADS": "=== DOWNLOADS & UPDATES ===",
   "downloadHistoryTitle": "DOWNLOADS",
   "openDownloadsFolderBtn": "OPEN DOWNLOADS FOLDER",
@@ -107,6 +112,7 @@
   "statusCancelled": "Cancelled",
   "statusDownloading": "Downloading...",
   "browseTotalMods": "MODS: {{count}}",
+
   "__comment_CONTEXT": "=== CONTEXT MENUS ===",
   "ctxInstall": "Install",
   "ctxVisitNexus": "Visit on Nexus Mods",
@@ -118,6 +124,7 @@
   "priorityModalTitle": "Change Priority",
   "priorityModalTitleWithMod": "Change Priority: {{modName}}",
   "priorityModalDesc": "Enter a new priority number between 0 and {{max}}.",
+  
   "__comment_ALERTS": "=== ALERTS & ERRORS ===",
   "warningTitle": "Warning",
   "untrackedModsMsg": "WARNING: Untracked Mods Detected!\n\nYou have mods installed in your folder that were not installed via this Manager.\n\nThese files are NOT tracked by the Profile system. If you switch profiles, these files might be deleted or cause conflicts.\n\nTo fix this, delete them from the folder and reinstall them by dragging their .zip files into the Manager.",
