@@ -1822,8 +1822,6 @@ async fn download_mod_archive(
 
 #[tauri::command]
 fn show_in_folder(path: String) {
-    let p = PathBuf::from(&path);
-
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
@@ -1836,13 +1834,14 @@ fn show_in_folder(path: String) {
     #[cfg(target_os = "linux")]
     {
         use std::process::Command;
+        let p = PathBuf::from(&path);
+        
         if let Some(parent) = p.parent() {
             Command::new("xdg-open")
                 .arg(parent)
                 .spawn()
                 .ok();
         } else {
-            // Fallback if it's a root path
              Command::new("xdg-open")
                 .arg(path)
                 .spawn()
