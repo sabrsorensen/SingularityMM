@@ -1,6 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // --- IMPORTS ---
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
+#[cfg(target_os = "windows")]
+use winreg::RegKey;
+
 use chrono::{Utc, Local};
 use quick_xml::de::from_str;
 use quick_xml::events::Event;
@@ -15,8 +20,6 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri::{LogicalSize, PhysicalPosition};
 use unrar;
-use winreg::enums::*;
-use winreg::RegKey;
 use zip::ZipArchive;
 use std::time::UNIX_EPOCH;
 use std::process::Command;
@@ -524,97 +527,147 @@ fn get_state_file_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn find_game_path() -> Option<PathBuf> {
-    if cfg!(not(windows)) {
+    #[cfg(target_os = "windows")]
+    {
+        return find_steam_path()
+            .or_else(find_gog_path)
+            .or_else(find_gamepass_path);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // 1. Get the User's Home Directory
+        let home = std::env::var("HOME").ok()?;
+        let home_path = PathBuf::from(home);
+
+        // 2. Common Steam Library Locations on Linux
+        let possible_paths = vec![
+            home_path.join(".steam/steam/steamapps/common/No Man's Sky"),
+            home_path.join(".local/share/Steam/steamapps/common/No Man's Sky"),
+            // Flatpak Steam path
+            home_path.join(".var/app/com.valvesoftware.Steam/data/Steam/steamapps/common/No Man's Sky")
+        ];
+
+        for path in possible_paths {
+            // Check for the Binaries folder to verify it's a real install
+            if path.join("Binaries").exists() {
+                return Some(path);
+            }
+        }
+        
         return None;
     }
-    find_steam_path()
-        .or_else(find_gog_path)
-        .or_else(find_gamepass_path)
+    
+    // Fallback for MacOS or other OS
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    return None;
 }
 
 fn find_gog_path() -> Option<PathBuf> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    
-    let known_ids = ["1446213994", "1446223351"];
+    #[cfg(target_os = "windows")]
+    {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        let known_ids = ["1446213994", "1446223351"];
 
-    for id in known_ids {
-        let key_path = format!(r"SOFTWARE\WOW6432Node\GOG.com\Games\{}", id);
-        
-        if let Ok(gog_key) = hklm.open_subkey(&key_path) {
-            if let Ok(game_path_str) = gog_key.get_value::<String, _>("PATH") {
-                let game_path = PathBuf::from(game_path_str);
+        for id in known_ids {
+            let key_path = format!(r"SOFTWARE\WOW6432Node\GOG.com\Games\{}", id);
+            
+            if let Ok(gog_key) = hklm.open_subkey(&key_path) {
+                if let Ok(game_path_str) = gog_key.get_value::<String, _>("PATH") {
+                    let game_path = PathBuf::from(game_path_str);
+                    if game_path.join("Binaries").is_dir() {
+                        return Some(game_path);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    None
+}
+
+fn find_steam_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        if let Ok(steam_key) = hklm.open_subkey(r"SOFTWARE\WOW6432Node\Valve\Steam") {
+            if let Ok(steam_path_str) = steam_key.get_value::<String, _>("InstallPath") {
+                let steam_path = PathBuf::from(steam_path_str);
+                let mut library_folders = vec![steam_path.clone()];
+                
+                // Read libraryfolders.vdf
+                let vdf_path = steam_path.join("steamapps").join("libraryfolders.vdf");
+                if let Ok(content) = fs::read_to_string(&vdf_path) {
+                    for line in content.lines() {
+                        if let Some(path_str) = line.split('"').nth(3) {
+                            // Basic VDF parsing heuristic
+                            let p = PathBuf::from(path_str.replace("\\\\", "\\"));
+                            if p.exists() {
+                                library_folders.push(p);
+                            }
+                        }
+                    }
+                }
+
+                // Check all libraries for NMS
+                for folder in library_folders {
+                    let manifest_path = folder.join("steamapps").join("appmanifest_275850.acf");
+                    if let Ok(content) = fs::read_to_string(manifest_path) {
+                        if let Some(dir_str) = content
+                            .lines()
+                            .find(|l| l.contains("\"installdir\""))
+                            .and_then(|l| l.split('"').nth(3))
+                        {
+                            let game_path = folder.join("steamapps").join("common").join(dir_str);
+                            if game_path.is_dir() {
+                                return Some(game_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    None
+}
+
+fn find_gamepass_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let default_path = PathBuf::from("C:\\XboxGames\\No Man's Sky\\Content");
+        if default_path.join("Binaries").is_dir() {
+            return Some(default_path);
+        }
+        let output = match Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Get-AppxPackage -Name 'HelloGames.NoMansSky' | Select-Object -ExpandProperty InstallLocation",
+            ])
+            .output()
+            {
+                Ok(output) => output,
+                Err(_) => return None,
+            };
+
+        if output.status.success() {
+            let path_str = String::from_utf8(output.stdout).unwrap_or_default().trim().to_string();
+            if !path_str.is_empty() {
+                let game_path = PathBuf::from(path_str).join("Content");
                 if game_path.join("Binaries").is_dir() {
                     return Some(game_path);
                 }
             }
         }
+        None
     }
 
-    None
-}
-
-fn find_steam_path() -> Option<PathBuf> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let steam_key = hklm.open_subkey(r"SOFTWARE\WOW6432Node\Valve\Steam").ok()?;
-    let steam_path_str: String = steam_key.get_value("InstallPath").ok()?;
-    let steam_path = PathBuf::from(steam_path_str);
-    let mut library_folders = vec![steam_path.clone()];
-    if let Ok(content) = fs::read_to_string(steam_path.join("steamapps").join("libraryfolders.vdf"))
-    {
-        for line in content.lines() {
-            if let Some(path_str) = line.split('"').nth(3) {
-                let p = PathBuf::from(path_str.replace("\\\\", "\\"));
-                if p.exists() {
-                    library_folders.push(p);
-                }
-            }
-        }
-    }
-    for folder in library_folders {
-        let manifest_path = folder.join("steamapps").join("appmanifest_275850.acf");
-        if let Ok(content) = fs::read_to_string(manifest_path) {
-            if let Some(dir_str) = content
-                .lines()
-                .find(|l| l.contains("\"installdir\""))
-                .and_then(|l| l.split('"').nth(3))
-            {
-                let game_path = folder.join("steamapps").join("common").join(dir_str);
-                if game_path.is_dir() {
-                    return Some(game_path);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn find_gamepass_path() -> Option<PathBuf> {
-    let default_path = PathBuf::from("C:\\XboxGames\\No Man's Sky\\Content");
-    if default_path.join("Binaries").is_dir() {
-        return Some(default_path);
-    }
-    let output = match Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "Get-AppxPackage -Name 'HelloGames.NoMansSky' | Select-Object -ExpandProperty InstallLocation",
-        ])
-        .output()
-        {
-            Ok(output) => output,
-            Err(_) => return None,
-        };
-
-    if output.status.success() {
-        let path_str = String::from_utf8(output.stdout).unwrap_or_default().trim().to_string();
-        if !path_str.is_empty() {
-            let game_path = PathBuf::from(path_str).join("Content");
-            if game_path.join("Binaries").is_dir() {
-                return Some(game_path);
-            }
-        }
-    }
-
+    #[cfg(not(target_os = "windows"))]
     None
 }
 
@@ -1150,45 +1203,25 @@ fn delete_settings_file() -> Result<String, String> {
 
 #[tauri::command]
 fn detect_game_installation(app: AppHandle) -> Option<GamePaths> {
-    if cfg!(not(windows)) { return None; }
-
     log_internal(&app, "INFO", "Starting Game Detection...");
 
-    // --- Try Steam ---
-    if let Some(path) = find_steam_path() {
-        let settings_dir = path.join("Binaries\\SETTINGS");
+    if let Some(path) = find_game_path() {
+        let settings_dir = path.join("Binaries").join("SETTINGS");
+        
         if settings_dir.exists() {
-            log_internal(&app, "INFO", &format!("Found Steam path: {:?}", path));
-            return Some(GamePaths {
-                game_root_path: path.to_string_lossy().into_owned(),
-                settings_root_path: path.to_string_lossy().into_owned(),
-                version_type: "Steam".to_string(),
-            });
-        }
-    }
+            log_internal(&app, "INFO", &format!("Found game path: {:?}", path));
+            
+            // Determine "Version Type" based on OS
+            #[cfg(target_os = "windows")]
+            let v_type = if path.to_string_lossy().contains("Xbox") { "GamePass" } else if path.to_string_lossy().contains("GOG") { "GOG" } else { "Steam" };
+            
+            #[cfg(target_os = "linux")]
+            let v_type = "Steam";
 
-    // --- Try GOG ---
-    if let Some(path) = find_gog_path() {
-        let settings_dir = path.join("Binaries\\SETTINGS");
-        if settings_dir.exists() {
-            log_internal(&app, "INFO", &format!("Found GOG path: {:?}", path));
             return Some(GamePaths {
                 game_root_path: path.to_string_lossy().into_owned(),
                 settings_root_path: path.to_string_lossy().into_owned(),
-                version_type: "GOG".to_string(),
-            });
-        }
-    }
-    
-    // --- Try Game Pass ---
-    if let Some(path) = find_gamepass_path() {
-        let settings_dir = path.join("Binaries\\SETTINGS");
-        if settings_dir.exists() {
-            log_internal(&app, "INFO", &format!("Found GamePass path: {:?}", path));
-            return Some(GamePaths {
-                game_root_path: path.to_string_lossy().into_owned(),
-                settings_root_path: path.to_string_lossy().into_owned(),
-                version_type: "GamePass".to_string(),
+                version_type: v_type.to_string(),
             });
         }
     }
@@ -1620,18 +1653,26 @@ fn get_nexus_api_key(app: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn unregister_nxm_protocol() -> Result<(), String> {
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         hkcu.delete_subkey_all("Software\\Classes\\nxm").map_err(|e| e.to_string())?;
-        println!("Successfully unregistered nxm:// protocol handler from current user.");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let home = std::env::var("HOME").map_err(|_| "Could not find HOME".to_string())?;
+        let desktop_file = PathBuf::from(home).join(".local/share/applications/nxm-handler.desktop");
+        if desktop_file.exists() {
+            fs::remove_file(desktop_file).map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
 
 #[tauri::command]
 fn is_protocol_handler_registered() -> bool {
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_path_str) = exe_path.to_str() {
@@ -1643,13 +1684,20 @@ fn is_protocol_handler_registered() -> bool {
                 }
             }
         }
+        return false;
     }
-    false
+
+    #[cfg(target_os = "linux")]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let desktop_file = PathBuf::from(home).join(".local/share/applications/nxm-handler.desktop");
+        return desktop_file.exists();
+    }
 }
 
 #[tauri::command]
 fn register_nxm_protocol() -> Result<(), String> {
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
         let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
         let exe_path_str = exe_path.to_string_lossy();
@@ -1668,6 +1716,39 @@ fn register_nxm_protocol() -> Result<(), String> {
 
         println!("Successfully registered nxm:// protocol handler to current user.");
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let home = std::env::var("HOME").map_err(|_| "Could not find HOME".to_string())?;
+        
+        // 1. Create the .desktop file content
+        let desktop_content = format!(
+            "[Desktop Entry]\n\
+            Type=Application\n\
+            Name=Singularity Mod Manager\n\
+            Exec=\"{}\" %u\n\
+            StartupNotify=false\n\
+            MimeType=x-scheme-handler/nxm;\n",
+            exe_path.to_string_lossy()
+        );
+
+        // 2. Write to ~/.local/share/applications/nxm-handler.desktop
+        let apps_dir = PathBuf::from(&home).join(".local/share/applications");
+        if !apps_dir.exists() {
+            fs::create_dir_all(&apps_dir).map_err(|e| e.to_string())?;
+        }
+        let desktop_file = apps_dir.join("nxm-handler.desktop");
+        fs::write(&desktop_file, desktop_content).map_err(|e| e.to_string())?;
+
+        // 3. Register the mimetype using xdg-mime
+        use std::process::Command;
+        Command::new("xdg-mime")
+            .args(["default", "nxm-handler.desktop", "x-scheme-handler/nxm"])
+            .output()
+            .map_err(|e| format!("Failed to run xdg-mime: {}", e))?;
+    }
+    
     Ok(())
 }
 
@@ -1741,6 +1822,8 @@ async fn download_mod_archive(
 
 #[tauri::command]
 fn show_in_folder(path: String) {
+    let p = PathBuf::from(&path);
+
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
@@ -1748,6 +1831,23 @@ fn show_in_folder(path: String) {
             .args(["/select,", &path])
             .spawn()
             .unwrap();
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        if let Some(parent) = p.parent() {
+            Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .ok();
+        } else {
+            // Fallback if it's a root path
+             Command::new("xdg-open")
+                .arg(path)
+                .spawn()
+                .ok();
+        }
     }
 }
 
