@@ -6,6 +6,10 @@
     "main"
   ],
   "permissions": [
+    "dialog:default",
+    "updater:default",
+    "process:default",
+    "process:allow-restart",
     "core:default",
     "fs:allow-read-file",
     "fs:allow-write-file",

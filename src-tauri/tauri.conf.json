@@ -26,10 +26,12 @@
   "identifier": "com.syzzle.singularity",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFQkZEMERDMUY4OUIwREMKUldUY3NJa2YzTkMvUHVaM1ZtU1RxUGZYUDV0cWdmOE1PRTNoZjNyOGNhYXQ4M2dXYnlka3RRSkQK",
+      "active": true,
       "endpoints": [
         "https://gist.githubusercontent.com/Syzzle07/9d29be1615e75e9206520811047be899/raw/latest.json"
       ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExMTI1QzA4RDdGNkJCM0EKUldRNnUvYlhDRndTb2IrbDg0bmVjV3BkV2ZXWGFjdGFCTndvK1dVY2hyQjI0S09UMU02enp0bU8K",
       "windows": {
         "installMode": "passive"
       }
