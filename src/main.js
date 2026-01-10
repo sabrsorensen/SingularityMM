@@ -246,6 +246,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- AUTO-REFRESH ON FOCUS ---
+  // If the user deletes a mod in Explorer and tabs back, this updates everything.
+  window.addEventListener('focus', async () => {
+    // Only run if we are fully initialized and on the "My Mods" view
+    if (appState.activeProfile && !appState.isPopulating && !myModsView.classList.contains('hidden')) {
+
+      console.log("App focused. Syncing with disk...");
+
+      try {
+        // 1. Call Rust: This cleans the file on disk and returns the correct list
+        const cleanList = await invoke('get_all_mods_for_render');
+
+        // 2. Reload the in-memory XML from the disk
+        if (appState.currentFilePath) {
+          const freshContent = await readTextFile(appState.currentFilePath);
+          appState.xmlDoc = new DOMParser().parseFromString(freshContent, "application/xml");
+        }
+
+        // 3. Update the UI with the clean list
+        await renderModList(cleanList);
+
+        // 4. Update Profile JSON to match the new reality
+        await saveCurrentProfile();
+
+        // 5. Sync Download History visuals if the modal happens to be open
+        if (!downloadHistoryModalOverlay.classList.contains('hidden')) {
+          await syncDownloadHistoryWithProfile(appState.activeProfile);
+          renderDownloadHistory();
+        }
+      } catch (e) {
+        console.warn("Auto-refresh failed:", e);
+      }
+    }
+  });
+
   // --- Monitor Window Resizing ---
   // This debounces the event so it only logs once when the resizing STOPS.
   let resizeLogTimeout;

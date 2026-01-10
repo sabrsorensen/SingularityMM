@@ -768,35 +768,94 @@ where
 // --- TAURI COMMANDS ---
 
 #[tauri::command]
-fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
+fn get_all_mods_for_render(app: AppHandle) -> Result<Vec<ModRenderData>, String> {
     let game_path =
         find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
     let mods_path = game_path.join("GAMEDATA").join("MODS");
-
-    let mut real_folder_names: HashMap<String, String> = HashMap::new();
-    if let Ok(entries) = fs::read_dir(&mods_path) {
-        for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                let real_name = entry.file_name().to_string_lossy().into_owned();
-                real_folder_names.insert(real_name.to_uppercase(), real_name);
-            }
-        }
-    }
-
-    let settings_file_path = game_path
-        .join("Binaries")
-        .join("SETTINGS")
-        .join("GCMODSETTINGS.MXML");
+    let settings_file_path = game_path.join("Binaries").join("SETTINGS").join("GCMODSETTINGS.MXML");
 
     if !settings_file_path.exists() {
         return Ok(Vec::new());
     }
 
+    // 1. Scan Disk for Real Folders
+    // We create a Set of Uppercase names for easy comparison
+    let mut real_folders_map: HashMap<String, String> = HashMap::new();
+    let mut real_folders_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    
+    if let Ok(entries) = fs::read_dir(&mods_path) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let real_name = entry.file_name().to_string_lossy().into_owned();
+                let upper_name = real_name.to_uppercase();
+                real_folders_map.insert(upper_name.clone(), real_name);
+                real_folders_set.insert(upper_name);
+            }
+        }
+    }
+
+    // 2. Read and Parse XML
     let xml_content = fs::read_to_string(&settings_file_path)
         .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
-    let root: SettingsData =
+    let mut root: SettingsData =
         from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
 
+    let mut dirty = false; // Track if we need to save changes
+
+    // 3. Clean Orphans (Entries in XML but not on Disk)
+    if let Some(prop) = root.properties.iter_mut().find(|p| p.name == "Data") {
+        let original_len = prop.mods.len();
+        
+        prop.mods.retain(|entry| {
+            let xml_name = entry.properties.iter()
+                .find(|p| p.name == "Name")
+                .and_then(|p| p.value.as_ref())
+                .map(|s| s.to_uppercase())
+                .unwrap_or_default();
+            
+            // Keep it ONLY if it exists on disk
+            real_folders_set.contains(&xml_name)
+        });
+
+        if prop.mods.len() != original_len {
+            dirty = true;
+            // Re-index priorities to avoid gaps
+            for (i, mod_entry) in prop.mods.iter_mut().enumerate() {
+                mod_entry.index = i.to_string();
+                if let Some(priority_prop) = mod_entry.properties.iter_mut().find(|p| p.name == "ModPriority") {
+                    priority_prop.value = Some(i.to_string());
+                }
+            }
+        }
+    }
+
+    // 4. Save XML if we removed anything
+    if dirty {
+        // Reuse serialization logic (inline to avoid ownership issues)
+        let unformatted_xml = to_string(&root).map_err(|e| e.to_string())?;
+        let mut reader = Reader::from_str(&unformatted_xml);
+        reader.config_mut().trim_text(true);
+        let mut writer = Writer::new_with_indent(Vec::new(), b' ', 2);
+        loop {
+            match reader.read_event() {
+                Ok(Event::Eof) => break,
+                Ok(event) => writer.write_event(event).unwrap(),
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        let buf = writer.into_inner();
+        let xml_body = String::from_utf8(buf).map_err(|e| e.to_string())?;
+        let final_content = format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n{}", xml_body)
+            .replace(" name=\"Data\" value=\"\"", " name=\"Data\"")
+            .replace(" name=\"Dependencies\" value=\"\"", " name=\"Dependencies\"")
+            .replace("\"/>", "\" />");
+
+        // We use a simplified write here directly since we have the path
+        let _ = fs::write(&settings_file_path, final_content);
+        log_internal(&app, "INFO", "Cleaned orphaned mods from GCMODSETTINGS.MXML");
+    }
+
+    // 5. Build Render List
     let mut mods_to_render = Vec::new();
 
     if let Some(prop) = root.properties.iter().find(|p| p.name == "Data") {
@@ -806,10 +865,10 @@ fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
                 .iter()
                 .find(|p| p.name == "Name")
                 .and_then(|p| p.value.as_ref());
-
+            
             if let Some(xml_name) = xml_name_prop {
-                // Resolve the REAL folder name from the map, fallback to XML name if missing on disk
-                let folder_name = real_folder_names
+                // Get Real Name from Map
+                let folder_name = real_folders_map
                     .get(&xml_name.to_uppercase())
                     .cloned()
                     .unwrap_or_else(|| xml_name.clone());
@@ -821,7 +880,7 @@ fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
                     .and_then(|p| p.value.as_deref())
                     .unwrap_or("false")
                     .eq_ignore_ascii_case("true");
-
+                
                 let priority = mod_entry
                     .properties
                     .iter()
@@ -831,35 +890,18 @@ fn get_all_mods_for_render() -> Result<Vec<ModRenderData>, String> {
                     .unwrap_or(0);
 
                 let mod_info_path = mods_path.join(&folder_name).join("mod_info.json");
-
+                
                 let local_info = if let Ok(content) = fs::read_to_string(&mod_info_path) {
                     if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
                         Some(LocalModInfo {
                             folder_name: folder_name.clone(),
-                            mod_id: json_val
-                                .get("modId")
-                                .or(json_val.get("id"))
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
-                            file_id: json_val
-                                .get("fileId")
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
-                            version: json_val
-                                .get("version")
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
-                            install_source: json_val
-                                .get("installSource")
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
+                            mod_id: json_val.get("modId").or(json_val.get("id")).and_then(|v| v.as_str()).map(String::from),
+                            file_id: json_val.get("fileId").and_then(|v| v.as_str()).map(String::from),
+                            version: json_val.get("version").and_then(|v| v.as_str()).map(String::from),
+                            install_source: json_val.get("installSource").and_then(|v| v.as_str()).map(String::from),
                         })
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
+                    } else { None }
+                } else { None };
 
                 mods_to_render.push(ModRenderData {
                     folder_name: folder_name,
@@ -1489,7 +1531,7 @@ fn rename_mod_folder(
     }
 
     // 4. Return fresh list
-    get_all_mods_for_render()
+    get_all_mods_for_render(app)
 }
 
 #[tauri::command]
@@ -1591,7 +1633,7 @@ fn delete_mod(app: AppHandle, mod_name: String) -> Result<Vec<ModRenderData>, St
     fs::write(&settings_file_path, &final_content)
         .map_err(|e| format!("Failed to save updated GCMODSETTINGS.MXML: {}", e))?;
 
-    get_all_mods_for_render()
+    get_all_mods_for_render(app)
 }
 
 #[tauri::command]
