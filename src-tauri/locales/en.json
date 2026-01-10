@@ -112,6 +112,7 @@
   "statusCancelled": "Cancelled",
   "statusDownloading": "Downloading...",
   "browseTotalMods": "MODS: {{count}}",
+  "checkUpdateBtn": "Check Update",
 
   "__comment_CONTEXT": "=== CONTEXT MENUS ===",
   "ctxInstall": "Install",

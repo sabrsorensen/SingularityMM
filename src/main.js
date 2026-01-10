@@ -3974,17 +3974,36 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       fsmInstallSelectedBtn.onclick = () => {
-        const selected = Array.from(document.querySelectorAll('.folder-select-checkbox:checked'))
-          .map(cb => cb.value)
-          .filter(val => val !== ".");
+        // 1. Get all checked values
+        let rawSelected = Array.from(document.querySelectorAll('.folder-select-checkbox:checked'))
+          .map(cb => cb.value);
+
+        // 2. Filter out the root dot "."
+        rawSelected = rawSelected.filter(val => val !== ".");
+
+        // 3. Remove children if their parent is already selected
+        rawSelected.sort();
+
+        const finalSelected = [];
+
+        for (const path of rawSelected) {
+          const isRedundant = finalSelected.some(parent => {
+            return path.startsWith(parent + "/") || path.startsWith(parent + "\\");
+          });
+
+          // If it's not a child of an existing selection, add it.
+          if (!isRedundant) {
+            finalSelected.push(path);
+          }
+        }
 
         const isFlatten = flattenStructureCb.checked;
         cleanup();
 
-        if (selected.length === 0) {
+        if (finalSelected.length === 0) {
           resolve(null);
         } else {
-          resolve({ selected: selected, flatten: isFlatten });
+          resolve({ selected: finalSelected, flatten: isFlatten });
         }
       };
     });

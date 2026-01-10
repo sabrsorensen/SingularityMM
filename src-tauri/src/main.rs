@@ -1095,19 +1095,12 @@ async fn install_mod_from_archive(
 
 #[tauri::command]
 fn finalize_installation(
-    app: AppHandle,
-    library_id: String,
+    app: AppHandle, 
+    library_id: String, 
     selected_folders: Vec<String>,
-    flatten_paths: bool,
+    flatten_paths: bool 
 ) -> Result<InstallationAnalysis, String> {
-    log_internal(
-        &app,
-        "INFO",
-        &format!(
-            "Finalizing installation. Source: {}, Flatten: {}",
-            library_id, flatten_paths
-        ),
-    );
+    log_internal(&app, "INFO", &format!("Finalizing installation. Source: {}, Flatten: {}", library_id, flatten_paths));
 
     let game_path = find_game_path().ok_or_else(|| "Could not find game path.".to_string())?;
     let mods_path = game_path.join("GAMEDATA").join("MODS");
@@ -1122,14 +1115,12 @@ fn finalize_installation(
         return Err(err);
     }
 
+    // Load existing mods for conflict checking
     let mut installed_mods_by_id: HashMap<String, String> = HashMap::new();
     if let Ok(entries) = fs::read_dir(&mods_path) {
         for entry in entries.filter_map(Result::ok) {
             if let Some(info) = read_mod_info(&entry.path()) {
-                if let (Some(mod_id), Some(folder_name)) = (
-                    info.mod_id,
-                    entry.path().file_name().and_then(|n| n.to_str()),
-                ) {
+                if let (Some(mod_id), Some(folder_name)) = (info.mod_id, entry.path().file_name().and_then(|n| n.to_str())) {
                     installed_mods_by_id.insert(mod_id, folder_name.to_string());
                 }
             }
@@ -1137,18 +1128,14 @@ fn finalize_installation(
     }
 
     let staging_dir = get_staging_dir(&app)?;
-    let conflict_staging_path =
-        staging_dir.join(format!("conflict_{}", Utc::now().timestamp_millis()));
-
+    let conflict_staging_path = staging_dir.join(format!("conflict_{}", Utc::now().timestamp_millis()));
+    
     let mut successes = Vec::new();
     let mut conflicts = Vec::new();
 
-    let items_to_process = if selected_folders.is_empty() {
-        log_internal(
-            &app,
-            "INFO",
-            "No specific folders selected. Installing all top-level folders.",
-        );
+    // If selected_folders is empty (or just contained "."), fallback to all top-level
+    let items_to_process = if selected_folders.is_empty() || (selected_folders.len() == 1 && selected_folders[0] == ".") {
+        log_internal(&app, "INFO", "No specific folders selected. Scanning all top-level folders.");
         fs::read_dir(&source_root)
             .map_err(|e| e.to_string())?
             .filter_map(Result::ok)
@@ -1156,11 +1143,7 @@ fn finalize_installation(
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect::<Vec<String>>()
     } else {
-        log_internal(
-            &app,
-            "INFO",
-            &format!("Selected folders to install: {:?}", selected_folders),
-        );
+        log_internal(&app, "INFO", &format!("Selected folders to install: {:?}", selected_folders));
         selected_folders
     };
 
@@ -1171,57 +1154,45 @@ fn finalize_installation(
     let mut ops: Vec<DeployOp> = Vec::new();
 
     for relative_path_str in items_to_process {
-        let source_path = source_root.join(&relative_path_str);
-        if !source_path.exists() {
-            continue;
-        }
+        // Handle the dot "." explicitly if it still sneaks in
+        let source_path = if relative_path_str == "." {
+            source_root.clone()
+        } else {
+            source_root.join(&relative_path_str)
+        };
+
+        if !source_path.exists() { continue; }
 
         if flatten_paths {
+            // "Smart Extract": Look deeper for the actual mod root
             let deep_candidates = scan_for_installable_mods(&source_path, &source_path);
 
             if !deep_candidates.is_empty() {
                 for deep_rel in deep_candidates {
-                    let deep_source = if deep_rel == "." {
-                        source_path.clone()
-                    } else {
-                        source_path.join(&deep_rel)
-                    };
-                    let folder_name = deep_source
-                        .file_name()
-                        .ok_or("Invalid path")?
-                        .to_string_lossy()
-                        .into_owned();
-                    ops.push(DeployOp {
-                        source: deep_source,
-                        dest_name: folder_name,
-                    });
+                    let deep_source = if deep_rel == "." { source_path.clone() } else { source_path.join(&deep_rel) };
+                    let folder_name = deep_source.file_name().ok_or("Invalid path")?.to_string_lossy().into_owned();
+                    
+                    // --- DEDUPLICATION CHECK ---
+                    if !ops.iter().any(|op| op.dest_name.eq_ignore_ascii_case(&folder_name)) {
+                        ops.push(DeployOp { source: deep_source, dest_name: folder_name });
+                    }
                 }
             } else {
-                let folder_name = source_path
-                    .file_name()
-                    .ok_or("Invalid path")?
-                    .to_string_lossy()
-                    .into_owned();
-                ops.push(DeployOp {
-                    source: source_path,
-                    dest_name: folder_name,
-                });
+                // No deep structure found, use current
+                let folder_name = source_path.file_name().ok_or("Invalid path")?.to_string_lossy().into_owned();
+                
+                // --- DEDUPLICATION CHECK ---
+                if !ops.iter().any(|op| op.dest_name.eq_ignore_ascii_case(&folder_name)) {
+                    ops.push(DeployOp { source: source_path, dest_name: folder_name });
+                }
             }
         } else {
-            let top_level_name = Path::new(&relative_path_str)
-                .components()
-                .next()
-                .ok_or("Invalid path")?
-                .as_os_str()
-                .to_string_lossy()
-                .into_owned();
-            let top_source = source_root.join(&top_level_name);
-
-            if !ops.iter().any(|m| m.dest_name == top_level_name) {
-                ops.push(DeployOp {
-                    source: top_source,
-                    dest_name: top_level_name,
-                });
+            // Exact Install: Use the folder structure exactly as selected
+            let folder_name = source_path.file_name().ok_or("Invalid path")?.to_string_lossy().into_owned();
+            
+            // --- DEDUPLICATION CHECK ---
+            if !ops.iter().any(|op| op.dest_name.eq_ignore_ascii_case(&folder_name)) {
+                ops.push(DeployOp { source: source_path, dest_name: folder_name });
             }
         }
     }
@@ -1232,12 +1203,10 @@ fn finalize_installation(
         if let Some(info) = read_mod_info(&op.source) {
             if let Some(mod_id) = info.mod_id {
                 if let Some(old_folder_name) = installed_mods_by_id.get(&mod_id) {
-                    if !conflict_staging_path.exists() {
-                        fs::create_dir_all(&conflict_staging_path).map_err(|e| e.to_string())?;
-                    }
-
+                    if !conflict_staging_path.exists() { fs::create_dir_all(&conflict_staging_path).map_err(|e| e.to_string())?; }
+                    
                     let staged_mod_path = conflict_staging_path.join(&op.dest_name);
-
+                    
                     if let Err(e) = deploy_structure_recursive(&op.source, &staged_mod_path) {
                         log_internal(&app, "ERROR", &format!("Failed to stage conflict: {}", e));
                     }
@@ -1254,18 +1223,12 @@ fn finalize_installation(
 
         if !conflict_found {
             let final_dest_path = mods_path.join(&op.dest_name);
-            log_internal(
-                &app,
-                "INFO",
-                &format!("Deploying mod folder: {}", op.dest_name),
-            );
-
+            log_internal(&app, "INFO", &format!("Deploying mod folder: {}", op.dest_name));
+            
             if final_dest_path.exists() {
-                if !conflict_staging_path.exists() {
-                    fs::create_dir_all(&conflict_staging_path).map_err(|e| e.to_string())?;
-                }
+                if !conflict_staging_path.exists() { fs::create_dir_all(&conflict_staging_path).map_err(|e| e.to_string())?; }
                 let staged_mod_path = conflict_staging_path.join(&op.dest_name);
-
+                
                 if let Err(e) = deploy_structure_recursive(&op.source, &staged_mod_path) {
                     log_internal(&app, "ERROR", &format!("Failed to stage overwrite: {}", e));
                 }
@@ -1281,7 +1244,7 @@ fn finalize_installation(
                     log_internal(&app, "ERROR", &err_msg);
                     return Err(err_msg);
                 }
-
+                
                 successes.push(ModInstallInfo {
                     name: op.dest_name,
                     temp_path: final_dest_path.to_string_lossy().into_owned(),
