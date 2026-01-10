@@ -13,6 +13,9 @@ tauri-build = { version = "2", features = [] }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1.0", features = ["derive"] }
@@ -34,6 +37,7 @@ tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 futures-util = "0.3"
 url = "2.5"
 sevenz-rust = "0.6"
+tauri-plugin-process = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

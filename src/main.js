@@ -1,3 +1,6 @@
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { getVersion } from '@tauri-apps/api/app';
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -945,6 +948,74 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- APP AUTO-UPDATER LOGIC ---
+  async function checkAppUpdate(isManual = false) {
+    try {
+      if (isManual) {
+        document.getElementById('checkAppUpdateBtn').textContent = "Checking...";
+        document.getElementById('checkAppUpdateBtn').disabled = true;
+      } else {
+        console.log("Running silent startup app update check...");
+      }
+
+      const update = await check();
+
+      if (update) {
+        console.log(`App Update found: ${update.version}`);
+
+        const confirmed = await window.customConfirm(
+          `A new version of Singularity is available!\n\nVersion: ${update.version}\n\n${update.body || "Bug fixes and improvements."}\n\nUpdate now?`,
+          "App Update Available",
+          "Update & Restart",
+          "Later"
+        );
+
+        if (confirmed) {
+          await window.customAlert("Downloading update... The app will restart automatically when finished.", "Updating");
+
+          let downloaded = 0;
+          let contentLength = 0;
+
+          await update.downloadAndInstall((event) => {
+            switch (event.event) {
+              case 'Started':
+                contentLength = event.data.contentLength;
+                console.log(`Update started: ${contentLength} bytes`);
+                break;
+              case 'Progress':
+                downloaded += event.data.chunkLength;
+                console.log(`Update progress: ${downloaded}`);
+                break;
+              case 'Finished':
+                console.log('Update download finished.');
+                break;
+            }
+          });
+
+          await relaunch();
+        }
+      } else {
+        if (isManual) {
+          await window.customAlert("You are using the latest version.", "Up to Date");
+        }
+      }
+    } catch (error) {
+      console.error("App update check failed:", error);
+      if (isManual) {
+        await window.customAlert(`Failed to check for updates: ${error}`, "Error");
+      }
+    } finally {
+      if (isManual) {
+        const btn = document.getElementById('checkAppUpdateBtn');
+        if (btn) {
+          btn.textContent = i18n.get('checkUpdateBtn') || "Check Update";
+          btn.disabled = false;
+        }
+      }
+    }
+  }
+
+  // --- CHECK MOD UPDATES ---
   async function checkForUpdates(isSilent = false) {
     if (!appState.gamePath || curatedData.length === 0) {
       if (!isSilent) await window.customAlert("Mod data is not loaded. Cannot check for updates.", "Error");
@@ -3698,7 +3769,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (isDir) {
-          // --- FIX: Initialize loaded based on isPreloaded ---
           let loaded = isPreloaded;
 
           expander.onclick = async (e) => {
@@ -4688,6 +4758,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 1. Initialize App (Handles Login, Language, History, and Migration in parallel)
       await initializeApp();
+
+      // --- APP UPDATER SETUP ---
+      // A. Display Version in Settings
+      try {
+        const v = await getVersion();
+        const el = document.getElementById('currentAppVersion');
+        if (el) el.textContent = `v${v}`;
+      } catch (e) { console.warn("Failed to get version", e); }
+
+      // B. Bind the Settings Button
+      const btnAppUpdate = document.getElementById('checkAppUpdateBtn');
+      if (btnAppUpdate) {
+        btnAppUpdate.addEventListener('click', () => checkAppUpdate(true));
+      }
+
+      // C. Run Silent Check
+      checkAppUpdate(false);
 
       // 2. Initialize Profile System
       await refreshProfileList();
