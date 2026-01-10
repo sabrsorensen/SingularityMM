@@ -1032,6 +1032,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- APP AUTO-UPDATER LOGIC ---
   async function checkAppUpdate(isManual = false) {
     try {
+      const isInstalled = await invoke('is_app_installed');
+
+      if (!isInstalled) {
+        console.log("Portable mode detected. Auto-updater disabled.");
+        if (isManual) {
+          await window.customAlert(
+            i18n.get('portableModeMsg'),
+            i18n.get('portableModeTitle')
+          );
+        }
+        return;
+      }
+
       if (isManual) {
         const btn = document.getElementById('checkAppUpdateBtn');
         if (btn) {
@@ -1092,9 +1105,11 @@ document.addEventListener('DOMContentLoaded', () => {
         await window.customAlert(i18n.get('updateErrorMsg', { error: String(error) }), i18n.get('updateErrorTitle'));
       }
     } finally {
+      // Re-enable button if it's installed
       if (isManual) {
         const btn = document.getElementById('checkAppUpdateBtn');
         if (btn) {
+          // Restore default text
           btn.textContent = i18n.get('checkUpdateBtn');
           btn.disabled = false;
         }
@@ -4924,25 +4939,43 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       console.log("Starting App Initialization...");
 
-      // 1. Initialize App (Handles Login, Language, History, and Migration in parallel)
+      // 1. Initialize App (Language, History, Migrations, etc.)
       await initializeApp();
 
-      // --- APP UPDATER SETUP ---
-      // A. Display Version in Settings
       try {
+        // A. Get and show version number in Settings
         const v = await getVersion();
         const el = document.getElementById('currentAppVersion');
         if (el) el.textContent = `v${v}`;
-      } catch (e) { console.warn("Failed to get version", e); }
 
-      // B. Bind the Settings Button
-      const btnAppUpdate = document.getElementById('checkAppUpdateBtn');
-      if (btnAppUpdate) {
-        btnAppUpdate.addEventListener('click', () => checkAppUpdate(true));
+        // B. Bind the Settings Button (With Portable Check)
+        const btnAppUpdate = document.getElementById('checkAppUpdateBtn');
+        if (btnAppUpdate) {
+          const isInstalled = await invoke('is_app_installed');
+
+          if (isInstalled) {
+            // INSTALLED MODE:
+            // 1. Enable the button click listener
+            btnAppUpdate.addEventListener('click', () => checkAppUpdate(true));
+
+            // 2. Run the Silent Check immediately on startup
+            checkAppUpdate(false);
+          } else {
+            // PORTABLE MODE:
+            // 1. Change text to "PORTABLE MODE"
+            btnAppUpdate.textContent = i18n.get('btnPortableMode') || "PORTABLE MODE";
+
+            // 2. Visually disable it
+            btnAppUpdate.classList.add('disabled');
+            btnAppUpdate.style.opacity = "0.5";
+            btnAppUpdate.style.cursor = "not-allowed";
+            btnAppUpdate.title = i18n.get('portableTooltip') || "Updates disabled in Portable version";
+
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to initialize updater UI:", e);
       }
-
-      // C. Run Silent Check
-      checkAppUpdate(false);
 
       // 2. Initialize Profile System
       await refreshProfileList();
@@ -4950,7 +4983,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedProfile = localStorage.getItem('activeProfile') || 'Default';
       appState.activeProfile = savedProfile;
 
-      // Safety Check: Ensure the saved profile actually exists in the list
+      // Safety Check: Ensure the saved profile actually exists
       const availableProfiles = Array.from(profileSelect.options).map(opt => opt.value);
       if (availableProfiles.includes(savedProfile)) {
         profileSelect.value = savedProfile;
@@ -4966,21 +4999,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // 3. Initialize Drag & Drop
       await setupDragAndDrop();
 
-      // Get available screen height (excludes taskbars)
+      // 4. Steam Deck / Small Screen Height Fix
       const screenHeight = window.screen.availHeight;
       const windowHeight = window.outerHeight;
 
-      // If the window is taller than the screen (e.g. 900px window on 800px Deck)
       if (windowHeight > screenHeight) {
         console.log("Small screen detected. Adjusting window height...");
-
-        // Resize to 90% of the screen height to be safe and look nice
         const newHeight = Math.floor(screenHeight * 0.90);
-
-        // Apply the new size
         await appWindow.setSize(new LogicalSize(DEFAULT_WIDTH, newHeight));
-
-        // Center the window so the title bar isn't stuck too high
         await appWindow.center();
       }
 

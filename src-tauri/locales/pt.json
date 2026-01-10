@@ -195,5 +195,9 @@
     "driveCheckMsg": "Seu jogo está no drive {{gameDrive}}:, mas sua Biblioteca de Mods está no {{libDrive}}:. \n\nPara fazer uso do Hardlink na instalação de mods, nós recomendamos mover sua Biblioteca para o drive {{gameDrive}}:.\n\nVocê quer escolher uma pasta no {{gameDrive}}: agora?",
     "btnMoveNow": "Mover Agora",
     "btnDontAskAgain": "Não perguntar novamente",
-    "confirmDeleteMultipleMsg": "Você tem certeza de que quer excluir os arquivos selecionados?"
+    "confirmDeleteMultipleMsg": "Você tem certeza de que quer excluir os arquivos selecionados?",
+    "portableModeTitle": "Modo Portátil",
+    "portableModeMsg": "Atualizações automáticas estão desabilitadas na versão portátil.\n\nPor favor baixe a versão mais recente manualmente no Nexus.",
+    "btnPortableMode": "MODO PORTÁTIL",
+    "portableTooltip": "Atualizações estão desabilitadas na versão portátil."
 }

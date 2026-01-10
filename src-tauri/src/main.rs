@@ -3094,6 +3094,39 @@ fn check_startup_intent(state: State<'_, StartupState>) -> Option<String> {
     pending.take()
 }
 
+#[tauri::command]
+fn is_app_installed(app: AppHandle) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        // 1. Get the path of the currently running executable
+        let current_exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+
+        // 2. Get the folder containing the executable
+        if let Some(parent_dir) = current_exe.parent() {
+            // 3. Check if "Uninstall.exe" exists in this folder
+            let uninstaller = parent_dir.join("Uninstall.exe");
+            
+            if uninstaller.exists() {
+                return true; // It's an installed version
+            }
+        }
+        
+        // No uninstaller found? Must be Portable.
+        return false;
+    }
+
+    // For Linux (AppImage), updates work fine in "portable" mode
+    #[cfg(target_os = "linux")]
+    return true;
+    
+    // Fallback for other OS
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    return true;
+}
+
 // --- MAIN FUNCTION ---
 fn main() {
     tauri::Builder::default()
@@ -3263,7 +3296,8 @@ fn main() {
             get_library_path,
             delete_library_folder,
             check_library_existence,
-            rename_mod_folder
+            rename_mod_folder,
+            is_app_installed
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

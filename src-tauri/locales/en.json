@@ -195,5 +195,11 @@
   "driveCheckMsg": "Your game is on drive {{gameDrive}}:, but your Mod Library is on {{libDrive}}:. \n\nTo be able to use Hardlink for mod installation, we recommend moving the Library to the {{gameDrive}}: drive.\n\nDo you want to select a new folder on {{gameDrive}}: now?",
   "btnMoveNow": "Move Now",
   "btnDontAskAgain": "Don't ask again",
-  "confirmDeleteMultipleMsg": "Are you sure you want to delete the selected files?"
+  "confirmDeleteMultipleMsg": "Are you sure you want to delete the selected files?",
+  "portableModeTitle": "Portable Mode",
+  "portableModeMsg": "Auto-updates are disabled in the Portable version.\n\nPlease download the latest version manually from the website.",
+  "btnPortableMode": "PORTABLE MODE",
+  "portableTooltip": "Updates are disabled in the Portable version."
+
+  
 }
