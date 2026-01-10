@@ -68,3 +68,23 @@ jobs:
           releaseBody: "Automatic release for version ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
+
+      # --- RENAME AND UPLOAD PORTABLE ---
+      - name: Rename and Upload Portable (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # Go to the build folder
+          cd src-tauri/target/x86_64-pc-windows-msvc/release/
+
+          # Rename the raw file to include "Portable"
+          mv Singularity.exe Singularity_Portable_${{ github.ref_name }}.exe
+
+        shell: bash
+
+      - name: Upload Portable Asset
+        if: matrix.platform == 'windows-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          # Point to the new renamed file
+          files: src-tauri/target/x86_64-pc-windows-msvc/release/Singularity_Portable_${{ github.ref_name }}.exe
