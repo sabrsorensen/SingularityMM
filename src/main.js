@@ -2595,42 +2595,58 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function filterAndDisplayMods() {
-    const searchTerm = browseSearchInput.value.toLowerCase();
+    if (!browseSearchInput || !browseFilterSelect || !browseSortSelect) return;
+
+    const searchTerm = browseSearchInput.value.toLowerCase().trim();
     const filterBy = browseFilterSelect.value;
     const sortBy = browseSortSelect.value;
+
+    if (!curatedData) return;
 
     let processedMods = [...curatedData];
 
     // --- STAGE 1: FILTERING ---
     if (searchTerm) {
       processedMods = processedMods.filter(modData => {
+        // CHECK 1: If entry is null, skip it
         if (!modData) return false;
+
+        // CHECK 2: Safe String Access
+        const name = (modData.name || "").toLowerCase();
+        const author = (modData.author || "").toLowerCase();
+        const summary = (modData.summary || "").toLowerCase();
+
         return (
-          modData.name.toLowerCase().includes(searchTerm) ||
-          modData.author.toLowerCase().includes(searchTerm) ||
-          modData.summary.toLowerCase().includes(searchTerm)
+          name.includes(searchTerm) ||
+          author.includes(searchTerm) ||
+          summary.includes(searchTerm)
         );
       });
     }
 
     if (filterBy === 'installed') {
-      processedMods = processedMods.filter(mod => appState.installedModsMap.has(String(mod.mod_id)));
+      processedMods = processedMods.filter(mod => mod && appState.installedModsMap.has(String(mod.mod_id)));
     } else if (filterBy === 'uninstalled') {
-      processedMods = processedMods.filter(mod => !appState.installedModsMap.has(String(mod.mod_id)));
+      processedMods = processedMods.filter(mod => mod && !appState.installedModsMap.has(String(mod.mod_id)));
     }
 
     // --- STAGE 2: SORTING ---
     if (sortBy === 'name_asc') {
-      processedMods.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      processedMods.sort((a, b) => {
+        // Safe access for sorting
+        const nameA = a?.name || "";
+        const nameB = b?.name || "";
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+      });
     } else {
-      processedMods.sort((a, b) => (b.updated_timestamp || 0) - (a.updated_timestamp || 0));
+      // Default: Last Updated (Desc)
+      processedMods.sort((a, b) => (b?.updated_timestamp || 0) - (a?.updated_timestamp || 0));
     }
 
-    // --- STAGE 3: PAGINATION ---
+    // --- STAGE 3: PAGINATION & DISPLAY ---
     const totalItems = processedMods.length;
-    const totalPages = Math.ceil(totalItems / appState.modsPerPage);
+    const totalPages = Math.ceil(totalItems / appState.modsPerPage) || 1;
 
-    // Safety check: If it filtered and current page is now out of bounds, reset to 1
     if (appState.currentPage > totalPages) appState.currentPage = 1;
     if (appState.currentPage < 1) appState.currentPage = 1;
 
@@ -2639,10 +2655,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modsForCurrentPage = processedMods.slice(startIndex, endIndex);
 
-    // --- STAGE 4: DISPLAY ---
     displayMods(modsForCurrentPage);
-
-    // Update the pagination UI
     renderPaginationControls(totalPages, appState.currentPage);
   }
 
@@ -2652,17 +2665,14 @@ document.addEventListener('DOMContentLoaded', () => {
     paginationContainer.innerHTML = '';
 
     // 1. Always Render the Total Count on the left
-    // We use curatedData.length to show the Total Database size (Tracked Mods)
     const countDiv = document.createElement('div');
     countDiv.className = 'pagination-count';
     countDiv.textContent = i18n.get('browseTotalMods', { count: curatedData.length });
     paginationContainer.appendChild(countDiv);
 
-    // 2. If no items at all (empty database or search mismatch), we might still want to show the count
-    // but if the grid is empty, usually we want the bar visible to show "0 Mods" or the total database size.
     paginationContainer.classList.remove('hidden');
 
-    // 3. Only render buttons if we have more than 1 page
+    // 2. Only render buttons if we have more than 1 page
     if (totalPages <= 1) {
       return;
     }
