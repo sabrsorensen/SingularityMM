@@ -55,7 +55,9 @@ jobs:
         run: npm install
 
       - name: Build Tauri Application
-        run: npm run tauri build
+        run: |
+          # Build without updater artifacts to avoid signing requirements
+          npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'
 
       - name: Prepare Steam Deck Package
         run: |
