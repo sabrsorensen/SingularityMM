@@ -294,6 +294,8 @@ jobs:
           export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
           export EGL_PLATFORM=x11
           export ATK_ADAPTOR=dbus
+          # Tell WebKit where to find helper processes in Flatpak
+          export WEBKIT_EXEC_PATH="/app/libexec"
           exec /app/bin/singularity "$@"
           EOF
           
