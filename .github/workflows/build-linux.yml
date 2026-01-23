@@ -43,7 +43,9 @@ jobs:
             libatk1.0-dev \
             at-spi2-core \
             flatpak \
-            flatpak-builder
+            flatpak-builder \
+            fuse3 \
+            fusermount3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -213,8 +215,12 @@ jobs:
           # Add Flathub repository
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           
-          # Install required runtime and SDK (try 22.08 as fallback)
-          sudo flatpak install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08 || true
+          # Install required runtime and SDK
+          sudo flatpak install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08
+          
+          # Setup user flatpak for build isolation
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08
 
       - name: Create Flatpak
         run: |
@@ -295,20 +301,18 @@ jobs:
           echo "Flatpak source directory contents:"
           ls -la flatpak-source/
           
-          # Build Flatpak
+          # Build Flatpak with user installation and disable sandboxing
           echo "Building Flatpak..."
           mkdir -p flatpak-build flatpak-repo
           
-          if flatpak-builder --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json; then
-            echo "Flatpak build successful, creating bundle..."
-            # Export to .flatpak file
-            flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
-            echo "Flatpak bundle created successfully"
-            ls -lh singularity-mm-steam-deck.flatpak
-          else
-            echo "Flatpak build failed, skipping bundle creation"
-            touch singularity-mm-steam-deck.flatpak.failed
-          fi
+          # Use --disable-rofiles-fuse to avoid FUSE issues in CI
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json
+          
+          echo "Flatpak build successful, creating bundle..."
+          # Export to .flatpak file
+          flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
+          echo "Flatpak bundle created successfully"
+          ls -lh singularity-mm-steam-deck.flatpak
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -317,7 +321,7 @@ jobs:
           path: |
             singularity-mm-steam-deck.tar.gz
             singularity-mm-steam-deck.AppImage
-            singularity-mm-steam-deck.flatpak*
+            singularity-mm-steam-deck.flatpak
 
       - name: Create Release (on push to main)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
