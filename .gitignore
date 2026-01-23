@@ -37,3 +37,23 @@ curated/
 mod_warnings.json
 
 $HOME/
+
+# Steam Deck build artifacts and packaging
+SingularityPortable/
+flatpak-build/
+*.tar.gz
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+*.png
+build-flatpak.sh
+flatpak-wrapper.sh
+steam-deck-launcher.sh
+com.syzzle.singularity*.json
+com.syzzle.singularity*.desktop
+com.syzzle.singularity*.metainfo.xml
+singularity-steamdeck.desktop
+STEAM_DECK_*.md
+Screenshot_*.png
+.github-workflows-build-steam-deck.yml
