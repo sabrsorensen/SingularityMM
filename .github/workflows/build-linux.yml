@@ -94,7 +94,7 @@ jobs:
             fi
           done < all_deps.txt
           
-          # Also copy commonly needed libraries that might be missing
+          # Also copy commonly needed libraries and executables that might be missing
           for common_lib in /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.* \
                            /usr/lib/x86_64-linux-gnu/libgtk-3.so.* \
                            /usr/lib/x86_64-linux-gnu/libgdk-3.so.* \
@@ -107,6 +107,13 @@ jobs:
               fi
             fi
           done
+          
+          # Copy WebKit helper processes
+          mkdir -p steam-deck-package/libexec/webkit2gtk-4.1
+          if [[ -d "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1" ]]; then
+            echo "Copying WebKit helper processes..."
+            cp -r /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/* steam-deck-package/libexec/webkit2gtk-4.1/ || true
+          fi
           
           echo "Total libraries bundled: $(ls -1 steam-deck-package/lib/ | wc -l)"
           echo "Library directory size: $(du -sh steam-deck-package/lib/)"
@@ -253,9 +260,10 @@ jobs:
                 "name": "singularity",
                 "buildsystem": "simple",
                 "build-commands": [
-                  "mkdir -p /app/bin /app/lib /app/share/applications /app/share/icons/hicolor/128x128/apps",
+                  "mkdir -p /app/bin /app/lib /app/libexec /app/share/applications /app/share/icons/hicolor/128x128/apps",
                   "install -m755 Singularity /app/bin/singularity",
                   "for lib in lib/*.so*; do if [[ ! $(basename \"$lib\") =~ ^(libc|libdl|libpthread|libm|librt|libresolv|libnss_|libutil)\\. ]]; then cp \"$lib\" /app/lib/; fi; done",
+                  "if [[ -d libexec ]]; then cp -r libexec/* /app/libexec/; fi",
                   "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
                   "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
                   "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
