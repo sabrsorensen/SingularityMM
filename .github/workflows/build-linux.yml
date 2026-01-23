@@ -67,36 +67,42 @@ jobs:
           # Copy the binary (correct name is Singularity)
           cp src-tauri/target/release/Singularity steam-deck-package/bin/
           
-          # Function to get library dependencies recursively
-          get_deps() {
-            local lib="$1"
-            if [[ -f "$lib" ]]; then
-              ldd "$lib" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read dep; do
-                if [[ -f "$dep" && ! "$dep" =~ ^/lib/ && ! "$dep" =~ ^/usr/lib/ ]]; then
-                  echo "$dep"
-                  get_deps "$dep"
-                fi
-              done
-            fi
-          }
+          echo "Analyzing binary dependencies..."
+          ldd steam-deck-package/bin/Singularity
           
-          # Get all dependencies
-          echo "Collecting dependencies..."
-          {
-            ldd steam-deck-package/bin/Singularity | grep "=> /" | awk '{print $3}'
-            get_deps steam-deck-package/bin/Singularity
-          } | sort -u > deps.txt
+          # Collect ALL dynamic library dependencies (not just non-system ones)
+          echo "Collecting all dependencies..."
+          ldd steam-deck-package/bin/Singularity | grep "=> /" | awk '{print $3}' | sort -u > all_deps.txt
           
-          # Copy essential libraries
+          echo "Found $(wc -l < all_deps.txt) total dependencies"
+          
+          # Copy all dependencies except absolute system libraries
           while read -r lib; do
-            if [[ -f "$lib" && ! "$lib" =~ ^/lib/x86_64-linux-gnu/ && ! "$lib" =~ ^/usr/lib/x86_64-linux-gnu/libc\. ]]; then
+            if [[ -f "$lib" && "$lib" != "/lib64/ld-linux-x86-64.so.2" ]]; then
               libname=$(basename "$lib")
               if [[ ! -f "steam-deck-package/lib/$libname" ]]; then
-                echo "Copying $lib"
-                cp "$lib" steam-deck-package/lib/
+                echo "Copying $lib -> steam-deck-package/lib/$libname"
+                cp "$lib" "steam-deck-package/lib/$libname" || echo "Failed to copy $lib"
               fi
             fi
-          done < deps.txt
+          done < all_deps.txt
+          
+          # Also copy commonly needed libraries that might be missing
+          for common_lib in /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.* \
+                           /usr/lib/x86_64-linux-gnu/libgtk-3.so.* \
+                           /usr/lib/x86_64-linux-gnu/libgdk-3.so.* \
+                           /usr/lib/x86_64-linux-gnu/libglib-2.0.so.*; do
+            if [[ -f "$common_lib" ]]; then
+              libname=$(basename "$common_lib")
+              if [[ ! -f "steam-deck-package/lib/$libname" ]]; then
+                echo "Adding common library: $common_lib"
+                cp "$common_lib" "steam-deck-package/lib/" || true
+              fi
+            fi
+          done
+          
+          echo "Total libraries bundled: $(ls -1 steam-deck-package/lib/ | wc -l)"
+          echo "Library directory size: $(du -sh steam-deck-package/lib/)"
           
           # Set RPATH for the main binary
           patchelf --set-rpath '$ORIGIN/../lib' steam-deck-package/bin/Singularity
@@ -104,7 +110,8 @@ jobs:
           # Fix RPATH for all copied libraries
           for lib in steam-deck-package/lib/*.so*; do
             if [[ -f "$lib" ]]; then
-              patchelf --set-rpath '$ORIGIN' "$lib" 2>/dev/null || true
+              echo "Setting RPATH for $(basename "$lib")"
+              patchelf --set-rpath '$ORIGIN' "$lib" 2>/dev/null || echo "Could not patch $(basename "$lib")"
             fi
           done
           
@@ -141,6 +148,7 @@ jobs:
           
           echo "Package contents:"
           find steam-deck-package -type f | sort
+          echo "Total package size: $(du -sh steam-deck-package/)"
 
       - name: Create Tarball
         run: |
