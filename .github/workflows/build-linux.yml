@@ -160,6 +160,9 @@ jobs:
           # Copy files to AppDir
           cp -r steam-deck-package/* AppDir/usr/
           
+          # Copy icon from Tauri icons
+          cp src-tauri/icons/128x128.png AppDir/singularity-mm.png
+          
           # Binary is already in the right place: AppDir/usr/bin/Singularity
           # No need to move it
           
@@ -181,8 +184,16 @@ jobs:
           
           chmod +x AppDir/AppRun
           
-          # Update desktop entry for AppImage
-          sed 's|Exec=./singularity-mm|Exec=Singularity|' steam-deck-package/singularity-mm.desktop > AppDir/singularity-mm.desktop
+          # Create proper desktop entry for AppImage
+          cat > AppDir/singularity-mm.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Singularity Mod Manager
+          Exec=Singularity
+          Icon=singularity-mm
+          Type=Application
+          Categories=Utility;
+          Comment=Manage your game modifications
+          EOF
           
           # Create AppImage
           ./appimagetool --appimage-extract-and-run AppDir singularity-mm-steam-deck.AppImage
