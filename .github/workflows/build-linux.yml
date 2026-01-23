@@ -255,7 +255,7 @@ jobs:
                 "build-commands": [
                   "mkdir -p /app/bin /app/lib /app/share/applications /app/share/icons/hicolor/128x128/apps",
                   "install -m755 Singularity /app/bin/Singularity",
-                  \"find lib -name '*.so*' ! -name 'libc.so*' ! -name 'libdl.so*' ! -name 'libpthread.so*' ! -name 'libm.so*' ! -name 'librt.so*' ! -name 'libresolv.so*' ! -name 'libnss_*.so*' ! -name 'libutil.so*' -exec cp {} /app/lib/ \\\\;\",
+                  "for lib in lib/*.so*; do if [[ ! $(basename \"$lib\") =~ ^(libc|libdl|libpthread|libm|librt|libresolv|libnss_|libutil)\\. ]]; then cp \"$lib\" /app/lib/; fi; done",
                   "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
                   "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
                   "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
