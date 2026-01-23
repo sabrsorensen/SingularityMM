@@ -41,7 +41,9 @@ jobs:
             libsoup2.4-dev \
             libjavascriptcoregtk-4.1-dev \
             libatk1.0-dev \
-            at-spi2-core
+            at-spi2-core \
+            flatpak \
+            flatpak-builder
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -206,6 +208,83 @@ jobs:
           # Create AppImage
           ./appimagetool --appimage-extract-and-run AppDir singularity-mm-steam-deck.AppImage
 
+      - name: Setup Flatpak
+        run: |
+          # Add Flathub repository
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          
+          # Install required runtime and SDK
+          sudo flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
+
+      - name: Create Flatpak
+        run: |
+          # Create Flatpak manifest
+          cat > com.syzzle.singularity.json << 'EOF'
+          {
+            "app-id": "com.syzzle.singularity",
+            "runtime": "org.freedesktop.Platform",
+            "runtime-version": "23.08",
+            "sdk": "org.freedesktop.Sdk",
+            "command": "singularity",
+            "finish-args": [
+              "--share=network",
+              "--share=ipc",
+              "--socket=fallback-x11",
+              "--socket=wayland",
+              "--device=dri",
+              "--filesystem=home",
+              "--filesystem=xdg-download",
+              "--filesystem=xdg-documents",
+              "--env=EGL_PLATFORM=x11",
+              "--env=ATK_ADAPTOR=dbus"
+            ],
+            "modules": [
+              {
+                "name": "singularity",
+                "buildsystem": "simple",
+                "build-commands": [
+                  "install -Dm755 Singularity /app/bin/singularity",
+                  "cp -r lib/* /app/lib/",
+                  "install -Dm644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
+                  "install -Dm644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
+                ],
+                "sources": [
+                  {
+                    "type": "dir",
+                    "path": "flatpak-source"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          
+          # Prepare Flatpak source directory
+          mkdir -p flatpak-source
+          cp steam-deck-package/bin/Singularity flatpak-source/
+          cp -r steam-deck-package/lib flatpak-source/
+          cp src-tauri/icons/128x128.png flatpak-source/singularity.png
+          
+          # Create Flatpak desktop file
+          cat > flatpak-source/singularity.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Singularity Mod Manager
+          Exec=singularity
+          Icon=com.syzzle.singularity
+          Type=Application
+          Categories=Utility;Game;
+          Comment=Manage your game modifications
+          Keywords=mods;modding;games;
+          EOF
+          
+          # Build Flatpak
+          mkdir -p flatpak-build
+          flatpak-builder --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json
+          
+          # Export to .flatpak file
+          flatpak build-export flatpak-repo flatpak-build
+          flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -213,6 +292,7 @@ jobs:
           path: |
             singularity-mm-steam-deck.tar.gz
             singularity-mm-steam-deck.AppImage
+            singularity-mm-steam-deck.flatpak
 
       - name: Create Release (on push to main)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -224,6 +304,7 @@ jobs:
             Steam Deck compatible build with bundled dependencies.
             
             **Installation Options:**
+            - **Flatpak** (Recommended for Steam Deck): Install via `flatpak install singularity-mm-steam-deck.flatpak` or Discover
             - **Tarball**: Extract anywhere and run `./singularity-mm`
             - **AppImage**: Make executable and run directly
             
@@ -236,6 +317,7 @@ jobs:
           files: |
             singularity-mm-steam-deck.tar.gz
             singularity-mm-steam-deck.AppImage
+            singularity-mm-steam-deck.flatpak
           draft: false
           prerelease: false
         env:
