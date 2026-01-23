@@ -45,7 +45,7 @@ jobs:
             flatpak \
             flatpak-builder \
             fuse3 \
-            fusermount3
+            libfuse3-3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
