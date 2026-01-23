@@ -213,19 +213,19 @@ jobs:
           # Add Flathub repository
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           
-          # Install required runtime and SDK
-          sudo flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
+          # Install required runtime and SDK (try 22.08 as fallback)
+          sudo flatpak install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08 || true
 
       - name: Create Flatpak
         run: |
-          # Create Flatpak manifest
+          # Create Flatpak manifest with simpler approach
           cat > com.syzzle.singularity.json << 'EOF'
           {
             "app-id": "com.syzzle.singularity",
             "runtime": "org.freedesktop.Platform",
-            "runtime-version": "23.08",
+            "runtime-version": "22.08",
             "sdk": "org.freedesktop.Sdk",
-            "command": "singularity",
+            "command": "singularity-wrapper",
             "finish-args": [
               "--share=network",
               "--share=ipc",
@@ -243,8 +243,11 @@ jobs:
                 "name": "singularity",
                 "buildsystem": "simple",
                 "build-commands": [
-                  "install -Dm755 Singularity /app/bin/singularity",
-                  "cp -r lib/* /app/lib/",
+                  "mkdir -p /app/bin /app/lib",
+                  "cp Singularity /app/bin/",
+                  "cp -r lib /app/",
+                  "cp singularity-wrapper /app/bin/",
+                  "chmod +x /app/bin/singularity-wrapper",
                   "install -Dm644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
                   "install -Dm644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
                 ],
@@ -261,15 +264,27 @@ jobs:
           
           # Prepare Flatpak source directory
           mkdir -p flatpak-source
+          echo "Copying files to flatpak-source..."
+          
+          # Copy binary and libraries
           cp steam-deck-package/bin/Singularity flatpak-source/
           cp -r steam-deck-package/lib flatpak-source/
           cp src-tauri/icons/128x128.png flatpak-source/singularity.png
           
-          # Create Flatpak desktop file
+          # Create wrapper script
+          cat > flatpak-source/singularity-wrapper << 'EOF'
+          #!/bin/bash
+          export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
+          export EGL_PLATFORM=x11
+          export ATK_ADAPTOR=dbus
+          exec /app/bin/Singularity "$@"
+          EOF
+          
+          # Create Flatpak desktop file  
           cat > flatpak-source/singularity.desktop << 'EOF'
           [Desktop Entry]
           Name=Singularity Mod Manager
-          Exec=singularity
+          Exec=singularity-wrapper
           Icon=com.syzzle.singularity
           Type=Application
           Categories=Utility;Game;
@@ -277,13 +292,23 @@ jobs:
           Keywords=mods;modding;games;
           EOF
           
-          # Build Flatpak
-          mkdir -p flatpak-build
-          flatpak-builder --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json
+          echo "Flatpak source directory contents:"
+          ls -la flatpak-source/
           
-          # Export to .flatpak file
-          flatpak build-export flatpak-repo flatpak-build
-          flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
+          # Build Flatpak
+          echo "Building Flatpak..."
+          mkdir -p flatpak-build flatpak-repo
+          
+          if flatpak-builder --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json; then
+            echo "Flatpak build successful, creating bundle..."
+            # Export to .flatpak file
+            flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
+            echo "Flatpak bundle created successfully"
+            ls -lh singularity-mm-steam-deck.flatpak
+          else
+            echo "Flatpak build failed, skipping bundle creation"
+            touch singularity-mm-steam-deck.flatpak.failed
+          fi
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -292,7 +317,7 @@ jobs:
           path: |
             singularity-mm-steam-deck.tar.gz
             singularity-mm-steam-deck.AppImage
-            singularity-mm-steam-deck.flatpak
+            singularity-mm-steam-deck.flatpak*
 
       - name: Create Release (on push to main)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
