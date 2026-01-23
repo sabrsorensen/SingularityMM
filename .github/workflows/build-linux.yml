@@ -64,8 +64,8 @@ jobs:
           # Create package directory
           mkdir -p steam-deck-package/lib steam-deck-package/bin
           
-          # Copy the binary
-          cp src-tauri/target/release/singularity-mm steam-deck-package/bin/
+          # Copy the binary (correct name is Singularity)
+          cp src-tauri/target/release/Singularity steam-deck-package/bin/
           
           # Function to get library dependencies recursively
           get_deps() {
@@ -83,8 +83,8 @@ jobs:
           # Get all dependencies
           echo "Collecting dependencies..."
           {
-            ldd steam-deck-package/bin/singularity-mm | grep "=> /" | awk '{print $3}'
-            get_deps steam-deck-package/bin/singularity-mm
+            ldd steam-deck-package/bin/Singularity | grep "=> /" | awk '{print $3}'
+            get_deps steam-deck-package/bin/Singularity
           } | sort -u > deps.txt
           
           # Copy essential libraries
@@ -99,7 +99,7 @@ jobs:
           done < deps.txt
           
           # Set RPATH for the main binary
-          patchelf --set-rpath '$ORIGIN/../lib' steam-deck-package/bin/singularity-mm
+          patchelf --set-rpath '$ORIGIN/../lib' steam-deck-package/bin/Singularity
           
           # Fix RPATH for all copied libraries
           for lib in steam-deck-package/lib/*.so*; do
@@ -123,7 +123,7 @@ jobs:
           export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
           
           # Run the application
-          exec "$DIR/bin/singularity-mm" "$@"
+          exec "$DIR/bin/Singularity" "$@"
           EOF
           
           chmod +x steam-deck-package/singularity-mm
@@ -160,8 +160,8 @@ jobs:
           # Copy files to AppDir
           cp -r steam-deck-package/* AppDir/usr/
           
-          # Move binary to usr/bin
-          mv AppDir/usr/bin/singularity-mm AppDir/usr/bin/
+          # Move binary to usr/bin (it's already named Singularity)
+          mv AppDir/usr/bin/Singularity AppDir/usr/bin/
           
           # Update launcher script for AppImage
           cat > AppDir/AppRun << 'EOF'
@@ -176,13 +176,13 @@ jobs:
           export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
           
           # Run the application
-          exec "$HERE/usr/bin/singularity-mm" "$@"
+          exec "$HERE/usr/bin/Singularity" "$@"
           EOF
           
           chmod +x AppDir/AppRun
           
           # Update desktop entry for AppImage
-          sed 's|Exec=./singularity-mm|Exec=singularity-mm|' steam-deck-package/singularity-mm.desktop > AppDir/singularity-mm.desktop
+          sed 's|Exec=./singularity-mm|Exec=Singularity|' steam-deck-package/singularity-mm.desktop > AppDir/singularity-mm.desktop
           
           # Create AppImage
           ./appimagetool --appimage-extract-and-run AppDir singularity-mm-steam-deck.AppImage
