@@ -213,12 +213,12 @@ jobs:
           # Add Flathub repository
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           
-          # Install required runtime and SDK
-          sudo flatpak install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08
+          # Install required runtime and SDK (use current version)
+          sudo flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
           
           # Setup user flatpak for build isolation
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak --user install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08
+          flatpak --user install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
 
       - name: Create Flatpak
         run: |
@@ -227,7 +227,7 @@ jobs:
           {
             "app-id": "com.syzzle.singularity",
             "runtime": "org.freedesktop.Platform",
-            "runtime-version": "22.08",
+            "runtime-version": "23.08",
             "sdk": "org.freedesktop.Sdk",
             "command": "singularity-wrapper",
             "finish-args": [
@@ -247,13 +247,12 @@ jobs:
                 "name": "singularity",
                 "buildsystem": "simple",
                 "build-commands": [
-                  "mkdir -p /app/bin /app/lib",
-                  "cp Singularity /app/bin/",
-                  "cp -r lib /app/",
-                  "cp singularity-wrapper /app/bin/",
-                  "chmod +x /app/bin/singularity-wrapper",
-                  "install -Dm644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
-                  "install -Dm644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
+                  "mkdir -p /app/bin /app/lib /app/share/applications /app/share/icons/hicolor/128x128/apps",
+                  "install -m755 Singularity /app/bin/Singularity",
+                  "find lib -name '*.so*' -exec install -m755 {} /app/lib/ \\;",
+                  "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
+                  "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
+                  "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
                 ],
                 "sources": [
                   {
