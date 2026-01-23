@@ -160,8 +160,8 @@ jobs:
           # Copy files to AppDir
           cp -r steam-deck-package/* AppDir/usr/
           
-          # Move binary to usr/bin (it's already named Singularity)
-          mv AppDir/usr/bin/Singularity AppDir/usr/bin/
+          # Binary is already in the right place: AppDir/usr/bin/Singularity
+          # No need to move it
           
           # Update launcher script for AppImage
           cat > AppDir/AppRun << 'EOF'
