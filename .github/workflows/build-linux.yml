@@ -1,10 +1,14 @@
-name: Build Linux Manual
+name: Build Steam Deck Compatible Linux
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-linux:
+  build-steam-deck:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -15,15 +19,29 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev \
-          build-essential \
-          curl \
-          wget \
-          file \
-          libssl-dev \
-          libgtk-3-dev \
-          libayatana-appindicator3-dev \
-          librsvg2-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            desktop-file-utils \
+            fuse \
+            libfuse2 \
+            libc6-dev \
+            libglib2.0-dev \
+            libgdk-pixbuf2.0-dev \
+            libpango1.0-dev \
+            libcairo2-dev \
+            libsoup2.4-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libatk1.0-dev \
+            at-spi2-core
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -36,14 +54,168 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Build Singularity
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri Application
+        run: npm run tauri build
+
+      - name: Prepare Steam Deck Package
+        run: |
+          # Create package directory
+          mkdir -p steam-deck-package/lib steam-deck-package/bin
+          
+          # Copy the binary
+          cp src-tauri/target/release/singularity-mm steam-deck-package/bin/
+          
+          # Function to get library dependencies recursively
+          get_deps() {
+            local lib="$1"
+            if [[ -f "$lib" ]]; then
+              ldd "$lib" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read dep; do
+                if [[ -f "$dep" && ! "$dep" =~ ^/lib/ && ! "$dep" =~ ^/usr/lib/ ]]; then
+                  echo "$dep"
+                  get_deps "$dep"
+                fi
+              done
+            fi
+          }
+          
+          # Get all dependencies
+          echo "Collecting dependencies..."
+          {
+            ldd steam-deck-package/bin/singularity-mm | grep "=> /" | awk '{print $3}'
+            get_deps steam-deck-package/bin/singularity-mm
+          } | sort -u > deps.txt
+          
+          # Copy essential libraries
+          while read -r lib; do
+            if [[ -f "$lib" && ! "$lib" =~ ^/lib/x86_64-linux-gnu/ && ! "$lib" =~ ^/usr/lib/x86_64-linux-gnu/libc\. ]]; then
+              libname=$(basename "$lib")
+              if [[ ! -f "steam-deck-package/lib/$libname" ]]; then
+                echo "Copying $lib"
+                cp "$lib" steam-deck-package/lib/
+              fi
+            fi
+          done < deps.txt
+          
+          # Set RPATH for the main binary
+          patchelf --set-rpath '$ORIGIN/../lib' steam-deck-package/bin/singularity-mm
+          
+          # Fix RPATH for all copied libraries
+          for lib in steam-deck-package/lib/*.so*; do
+            if [[ -f "$lib" ]]; then
+              patchelf --set-rpath '$ORIGIN' "$lib" 2>/dev/null || true
+            fi
+          done
+          
+          # Create launcher script
+          cat > steam-deck-package/singularity-mm << 'EOF'
+          #!/bin/bash
+          
+          # Steam Deck compatibility
+          export EGL_PLATFORM=x11
+          export ATK_ADAPTOR=dbus
+          
+          # Get the directory of this script
+          DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+          
+          # Add our lib directory to library path
+          export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
+          
+          # Run the application
+          exec "$DIR/bin/singularity-mm" "$@"
+          EOF
+          
+          chmod +x steam-deck-package/singularity-mm
+          
+          # Create desktop entry
+          cat > steam-deck-package/singularity-mm.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Singularity Mod Manager
+          Exec=./singularity-mm
+          Icon=singularity-mm
+          Type=Application
+          Categories=Game;Utility;
+          Comment=Manage your game modifications
+          EOF
+          
+          echo "Package contents:"
+          find steam-deck-package -type f | sort
+
+      - name: Create Tarball
+        run: |
+          tar -czf singularity-mm-steam-deck.tar.gz -C steam-deck-package .
+          echo "Created tarball: $(ls -lh singularity-mm-steam-deck.tar.gz)"
+
+      - name: Download AppImageTool
+        run: |
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+
+      - name: Create AppImage
+        run: |
+          # Prepare AppDir structure
+          mkdir -p AppDir/usr/bin AppDir/usr/lib
+          
+          # Copy files to AppDir
+          cp -r steam-deck-package/* AppDir/usr/
+          
+          # Move binary to usr/bin
+          mv AppDir/usr/bin/singularity-mm AppDir/usr/bin/
+          
+          # Update launcher script for AppImage
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          
+          # Steam Deck compatibility
+          export EGL_PLATFORM=x11
+          export ATK_ADAPTOR=dbus
+          
+          # AppImage environment
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+          
+          # Run the application
+          exec "$HERE/usr/bin/singularity-mm" "$@"
+          EOF
+          
+          chmod +x AppDir/AppRun
+          
+          # Update desktop entry for AppImage
+          sed 's|Exec=./singularity-mm|Exec=singularity-mm|' steam-deck-package/singularity-mm.desktop > AppDir/singularity-mm.desktop
+          
+          # Create AppImage
+          ./appimagetool --appimage-extract-and-run AppDir singularity-mm-steam-deck.AppImage
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: steam-deck-builds
+          path: |
+            singularity-mm-steam-deck.tar.gz
+            singularity-mm-steam-deck.AppImage
+
+      - name: Create Release (on push to main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "steam-deck-${{ github.run_number }}"
+          name: "Steam Deck Build #${{ github.run_number }}"
+          body: |
+            Steam Deck compatible build with bundled dependencies.
+            
+            **Installation Options:**
+            - **Tarball**: Extract anywhere and run `./singularity-mm`
+            - **AppImage**: Make executable and run directly
+            
+            **Steam Deck Setup:**
+            1. Switch to Desktop Mode
+            2. Download and extract/run the package
+            3. The launcher will automatically set required environment variables
+            
+            Built with Steam Deck compatibility features and bundled dependencies.
+          files: |
+            singularity-mm-steam-deck.tar.gz
+            singularity-mm-steam-deck.AppImage
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: "linux-build-${{ github.run_number }}"
-          releaseName: "Linux Build #${{ github.run_number }}"
-          releaseBody: "Automated Linux Build"
-          releaseDraft: true
-          prerelease: false
-          args: --target x86_64-unknown-linux-gnu
