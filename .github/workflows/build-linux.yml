@@ -43,9 +43,7 @@ jobs:
             libatk1.0-dev \
             at-spi2-core \
             flatpak \
-            flatpak-builder \
-            fuse3 \
-            libfuse3-3
+            flatpak-builder
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
