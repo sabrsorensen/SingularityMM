@@ -1,0 +1,81 @@
+{
+  "app-id": "com.syzzle.singularity",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "24.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "singularity-wrapper",
+  "finish-args": [
+    "--share=network",
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--filesystem=home",
+    "--filesystem=xdg-download",
+    "--filesystem=xdg-documents",
+    "--filesystem=xdg-desktop",
+    "--env=EGL_PLATFORM=x11",
+    "--env=ATK_ADAPTOR=dbus",
+    "--env=WEBKIT_EXEC_PATH=/app/libexec/webkit2gtk-4.1",
+    "--env=WEBKIT_DISABLE_COMPOSITING_MODE=1",
+    "--talk-name=org.freedesktop.Notifications",
+    "--talk-name=org.gtk.vfs.*",
+    "--filesystem=xdg-run/gvfsd"
+  ],
+  "modules": [
+    {
+      "name": "webkit-helpers",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/libexec/webkit2gtk-4.1",
+        "if [ -f /usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess ]; then install -m755 /usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess /app/libexec/webkit2gtk-4.1/; fi",
+        "if [ -f /usr/libexec/webkit2gtk-4.1/WebKitWebProcess ]; then install -m755 /usr/libexec/webkit2gtk-4.1/WebKitWebProcess /app/libexec/webkit2gtk-4.1/; fi",
+        "if [ -f /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess ]; then install -m755 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess /app/libexec/webkit2gtk-4.1/; fi",
+        "if [ -f /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess ]; then install -m755 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess /app/libexec/webkit2gtk-4.1/; fi",
+        "ls -la /app/libexec/webkit2gtk-4.1/ || echo 'No WebKit helpers found in system'"
+      ]
+    },
+    {
+      "name": "singularity",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/bin /app/lib /app/libexec /app/share/applications /app/share/icons/hicolor/128x128/apps",
+        "install -m755 Singularity /app/bin/singularity",
+        "echo 'Copying libraries excluding system libs...'",
+        "for lib in lib/*.so*; do",
+        "  libname=$(basename \"$lib\")",
+        "  if [[ ! $libname =~ ^(libc|libdl|libpthread|libm|librt|libresolv|libnss_|libutil|ld-linux)\\. ]]; then",
+        "    echo \"Copying: $libname\"",
+        "    cp \"$lib\" /app/lib/",
+        "  else",
+        "    echo \"Excluding system library: $libname\"",
+        "  fi",
+        "done",
+        "if [[ -d libexec ]]; then echo 'Copying additional libexec files...'; cp -r libexec/* /app/libexec/; fi",
+        "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
+        "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
+        "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png",
+        "echo 'Final directory structure:'",
+        "find /app -type f | head -20"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "flatpak-source"
+        }
+      ]
+    },
+    {
+      "name": "libcanberra",
+      "buildsystem": "meson",
+      "config-opts": ["-Dgtk3=true"],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://0pointer.de/lennart/projects/libcanberra/libcanberra-0.30.tar.xz",
+          "sha256": "your_sha256_hash_here"
+        }
+      ]
+    }
+  ]
+}
