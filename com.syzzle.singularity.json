@@ -47,8 +47,6 @@
         "  if [[ ! $libname =~ ^(libc|libdl|libpthread|libm|librt|libresolv|libnss_|libutil|ld-linux)\\. ]]; then",
         "    echo \"Copying: $libname\"",
         "    cp \"$lib\" /app/lib/",
-        "  else",
-        "    echo \"Excluding system library: $libname\"",
         "  fi",
         "done",
         "if [[ -d libexec ]]; then echo 'Copying additional libexec files...'; cp -r libexec/* /app/libexec/; fi",
