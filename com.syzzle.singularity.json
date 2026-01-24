@@ -72,9 +72,7 @@
     {
       "name": "util-linux",
       "buildsystem": "meson",
-      "config-opts": [
-        "-Dlastlog=false"
-      ],
+      "config-opts": ["-Dlastlog=false", "-Dpam=false"],
       "sources": [
         {
           "type": "archive",
