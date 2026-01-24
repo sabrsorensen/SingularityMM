@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:flatpak": "tauri build --target flatpak"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
