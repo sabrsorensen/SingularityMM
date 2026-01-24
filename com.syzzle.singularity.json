@@ -59,8 +59,8 @@
     },
     {
       "name": "libcanberra",
-      "buildsystem": "meson",
-      "config-opts": ["-Dgtk3=true"],
+      "buildsystem": "autotools",
+      "config-opts": ["--enable-gtk3"],
       "sources": [
         {
           "type": "archive",
