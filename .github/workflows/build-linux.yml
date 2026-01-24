@@ -65,19 +65,19 @@ jobs:
         run: |
           # Create package directory
           mkdir -p steam-deck-package/lib steam-deck-package/bin
-          
+
           # Copy the binary (correct name is Singularity)
           cp src-tauri/target/release/Singularity steam-deck-package/bin/
-          
+
           echo "Analyzing binary dependencies..."
           ldd steam-deck-package/bin/Singularity
-          
+
           # Collect ALL dynamic library dependencies (not just non-system ones)
           echo "Collecting all dependencies..."
           ldd steam-deck-package/bin/Singularity | grep "=> /" | awk '{print $3}' | sort -u > all_deps.txt
-          
+
           echo "Found $(wc -l < all_deps.txt) total dependencies"
-          
+
           # Copy all dependencies except absolute system libraries
           while read -r lib; do
             if [[ -f "$lib" && "$lib" != "/lib64/ld-linux-x86-64.so.2" ]]; then
@@ -93,7 +93,7 @@ jobs:
               fi
             fi
           done < all_deps.txt
-          
+
           # Also copy commonly needed libraries and executables that might be missing
           for common_lib in /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.* \
                            /usr/lib/x86_64-linux-gnu/libgtk-3.so.* \
@@ -107,20 +107,20 @@ jobs:
               fi
             fi
           done
-          
+
           # Copy WebKit helper processes
           mkdir -p steam-deck-package/libexec/webkit2gtk-4.1
           if [[ -d "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1" ]]; then
             echo "Copying WebKit helper processes..."
             cp -r /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/* steam-deck-package/libexec/webkit2gtk-4.1/ || true
           fi
-          
+
           echo "Total libraries bundled: $(ls -1 steam-deck-package/lib/ | wc -l)"
           echo "Library directory size: $(du -sh steam-deck-package/lib/)"
-          
+
           # Set RPATH for the main binary
           patchelf --set-rpath '$ORIGIN/../lib' steam-deck-package/bin/Singularity
-          
+
           # Fix RPATH for all copied libraries
           for lib in steam-deck-package/lib/*.so*; do
             if [[ -f "$lib" ]]; then
@@ -128,27 +128,27 @@ jobs:
               patchelf --set-rpath '$ORIGIN' "$lib" 2>/dev/null || echo "Could not patch $(basename "$lib")"
             fi
           done
-          
+
           # Create launcher script
           cat > steam-deck-package/singularity-mm << 'EOF'
           #!/bin/bash
-          
+
           # Steam Deck compatibility
           export EGL_PLATFORM=x11
           export ATK_ADAPTOR=dbus
-          
+
           # Get the directory of this script
           DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-          
+
           # Add our lib directory to library path
           export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
-          
+
           # Run the application
           exec "$DIR/bin/Singularity" "$@"
           EOF
-          
+
           chmod +x steam-deck-package/singularity-mm
-          
+
           # Create desktop entry
           cat > steam-deck-package/singularity-mm.desktop << 'EOF'
           [Desktop Entry]
@@ -159,7 +159,7 @@ jobs:
           Categories=Game;Utility;
           Comment=Manage your game modifications
           EOF
-          
+
           echo "Package contents:"
           find steam-deck-package -type f | sort
           echo "Total package size: $(du -sh steam-deck-package/)"
@@ -178,34 +178,34 @@ jobs:
         run: |
           # Prepare AppDir structure
           mkdir -p AppDir/usr/bin AppDir/usr/lib
-          
+
           # Copy files to AppDir
           cp -r steam-deck-package/* AppDir/usr/
-          
+
           # Copy icon from Tauri icons
           cp src-tauri/icons/128x128.png AppDir/singularity-mm.png
-          
+
           # Binary is already in the right place: AppDir/usr/bin/Singularity
           # No need to move it
-          
+
           # Update launcher script for AppImage
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
-          
+
           # Steam Deck compatibility
           export EGL_PLATFORM=x11
           export ATK_ADAPTOR=dbus
-          
+
           # AppImage environment
           HERE="$(dirname "$(readlink -f "${0}")")"
           export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
-          
+
           # Run the application
           exec "$HERE/usr/bin/Singularity" "$@"
           EOF
-          
+
           chmod +x AppDir/AppRun
-          
+
           # Create proper desktop entry for AppImage
           cat > AppDir/singularity-mm.desktop << 'EOF'
           [Desktop Entry]
@@ -216,7 +216,7 @@ jobs:
           Categories=Utility;
           Comment=Manage your game modifications
           EOF
-          
+
           # Create AppImage
           ./appimagetool --appimage-extract-and-run AppDir singularity-mm-steam-deck.AppImage
 
@@ -224,10 +224,10 @@ jobs:
         run: |
           # Add Flathub repository
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          
+
           # Install required runtime and SDK (use current version)
           sudo flatpak install -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
-          
+
           # Setup user flatpak for build isolation (suppress dconf warnings)
           export DCONF_PROFILE=/dev/null
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -235,18 +235,19 @@ jobs:
 
       - name: Create Flatpak Manifest
         run: |
+          mkdir -p flatpak-source
           cp com.syzzle.singularity.json flatpak-source/
 
       - name: Prepare Flatpak Source
         run: |
           mkdir -p flatpak-source
           echo "Copying files to flatpak-source..."
-          
+
           # Copy binary and libraries
           cp steam-deck-package/bin/Singularity flatpak-source/
           cp -r steam-deck-package/lib flatpak-source/
           cp src-tauri/icons/128x128.png flatpak-source/singularity.png
-          
+
           # Create wrapper script
           cat > flatpak-source/singularity-wrapper << 'EOF'
           #!/bin/bash
@@ -257,7 +258,7 @@ jobs:
           export WEBKIT_EXEC_PATH="/app/libexec"
           exec /app/bin/singularity "$@"
           EOF
-          
+
           chmod +x flatpak-source/singularity-wrapper
 
           # Create Flatpak desktop file
@@ -276,10 +277,10 @@ jobs:
         run: |
           echo "Building Flatpak..."
           mkdir -p flatpak-build flatpak-repo
-          
+
           # Use --disable-rofiles-fuse to avoid FUSE issues in CI
           flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean --repo=flatpak-repo flatpak-build com.syzzle.singularity.json
-          
+
           echo "Flatpak build successful, creating bundle..."
           # Export to .flatpak file
           flatpak build-bundle flatpak-repo singularity-mm-steam-deck.flatpak com.syzzle.singularity
@@ -303,17 +304,17 @@ jobs:
           name: "Steam Deck Build #${{ github.run_number }}"
           body: |
             Steam Deck compatible build with bundled dependencies.
-            
+
             **Installation Options:**
             - **Flatpak** (Recommended for Steam Deck): Install via `flatpak install singularity-mm-steam-deck.flatpak` or Discover
             - **Tarball**: Extract anywhere and run `./singularity-mm`
             - **AppImage**: Make executable and run directly
-            
+
             **Steam Deck Setup:**
             1. Switch to Desktop Mode
             2. Download and extract/run the package
             3. The launcher will automatically set required environment variables
-            
+
             Built with Steam Deck compatibility features and bundled dependencies.
           files: |
             singularity-mm-steam-deck.tar.gz
