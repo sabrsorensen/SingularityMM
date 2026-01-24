@@ -233,53 +233,12 @@ jobs:
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
 
-      - name: Create Flatpak
+      - name: Create Flatpak Manifest
         run: |
-          # Create Flatpak manifest with simpler approach
-          cat > com.syzzle.singularity.json << 'EOF'
-          {
-            "app-id": "com.syzzle.singularity",
-            "runtime": "org.freedesktop.Platform",
-            "runtime-version": "24.08",
-            "sdk": "org.freedesktop.Sdk",
-            "command": "singularity-wrapper",
-            "finish-args": [
-              "--share=network",
-              "--share=ipc",
-              "--socket=fallback-x11",
-              "--socket=wayland",
-              "--device=dri",
-              "--filesystem=home",
-              "--filesystem=xdg-download",
-              "--filesystem=xdg-documents",
-              "--env=EGL_PLATFORM=x11",
-              "--env=ATK_ADAPTOR=dbus"
-            ],
-            "modules": [
-              {
-                "name": "singularity",
-                "buildsystem": "simple",
-                "build-commands": [
-                  "mkdir -p /app/bin /app/lib /app/libexec /app/share/applications /app/share/icons/hicolor/128x128/apps",
-                  "install -m755 Singularity /app/bin/singularity",
-                  "for lib in lib/*.so*; do if [[ ! $(basename \"$lib\") =~ ^(libc|libdl|libpthread|libm|librt|libresolv|libnss_|libutil)\\. ]]; then cp \"$lib\" /app/lib/; fi; done",
-                  "if [[ -d libexec ]]; then cp -r libexec/* /app/libexec/; fi",
-                  "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
-                  "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
-                  "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
-                ],
-                "sources": [
-                  {
-                    "type": "dir",
-                    "path": "flatpak-source"
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-          
-          # Prepare Flatpak source directory
+          cp com.syzzle.singularity.json flatpak-source/
+
+      - name: Prepare Flatpak Source
+        run: |
           mkdir -p flatpak-source
           echo "Copying files to flatpak-source..."
           
@@ -299,7 +258,9 @@ jobs:
           exec /app/bin/singularity "$@"
           EOF
           
-          # Create Flatpak desktop file  
+          chmod +x flatpak-source/singularity-wrapper
+
+          # Create Flatpak desktop file
           cat > flatpak-source/singularity.desktop << 'EOF'
           [Desktop Entry]
           Name=Singularity Mod Manager
@@ -310,11 +271,9 @@ jobs:
           Comment=Manage your game modifications
           Keywords=mods;modding;games;
           EOF
-          
-          echo "Flatpak source directory contents:"
-          ls -la flatpak-source/
-          
-          # Build Flatpak with user installation and disable sandboxing
+
+      - name: Build Flatpak
+        run: |
           echo "Building Flatpak..."
           mkdir -p flatpak-build flatpak-repo
           
