@@ -233,15 +233,11 @@ jobs:
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
 
-      - name: Create Flatpak Manifest
-        run: |
-          mkdir -p flatpak-source
-          cp com.syzzle.singularity.json flatpak-source/
-
       - name: Prepare Flatpak Source
         run: |
           mkdir -p flatpak-source
           echo "Copying files to flatpak-source..."
+          cp com.syzzle.singularity.json flatpak-source/
 
           # Copy binary and libraries
           cp steam-deck-package/bin/Singularity flatpak-source/
