@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
-    "build:flatpak": "tauri build --target flatpak"
+    "build:flatpak": "tauri build --config '{\"bundle\":{\"targets\":[\"flatpak\"]}}'"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
