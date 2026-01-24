@@ -1,7 +1,7 @@
 {
   "app-id": "com.syzzle.singularity",
   "runtime": "org.freedesktop.Platform",
-  "runtime-version": "23.08",
+  "runtime-version": "25.08",
   "sdk": "org.freedesktop.Sdk",
   "command": "singularity-wrapper",
   "finish-args": [
@@ -72,6 +72,9 @@
     {
       "name": "util-linux",
       "buildsystem": "meson",
+      "config-opts": [
+        "-Dlastlog=false"
+      ],
       "sources": [
         {
           "type": "archive",
