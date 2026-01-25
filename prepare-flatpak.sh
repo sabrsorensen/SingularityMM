@@ -56,6 +56,7 @@ fi
 cat > flatpak-source/singularity-wrapper << 'EOF'
 #!/bin/bash
 export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
+export GDK_BACKEND=x11
 export EGL_PLATFORM=x11
 export ATK_ADAPTOR=dbus
 export WEBKIT_EXEC_PATH="/app/libexec"
