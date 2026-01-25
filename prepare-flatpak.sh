@@ -40,26 +40,21 @@ while read -r lib; do
 done < all_deps.txt
 
 # 5. Prepare flatpak-source directory
-# Remove problematic libraries before Flatpak build
-rm -f steam-deck-package/lib/libmount.so.1 steam-deck-package/lib/libblkid.so.1
-rm -f flatpak-source/lib/libmount.so.1 flatpak-source/lib/libblkid.so.1
-echo "Preparing flatpak-source directory..."
+# For Flatpak, we do NOT bundle any libraries - rely entirely on GNOME runtime
+# The GNOME Platform runtime provides all GTK, WebKit, and system libraries
+echo "Preparing flatpak-source directory (no bundled libs - using GNOME runtime)..."
 mkdir -p flatpak-source
-cp com.syzzle.singularity.json flatpak-source/
 cp steam-deck-package/bin/Singularity flatpak-source/
-cp -r steam-deck-package/lib flatpak-source/
 if [ -f src-tauri/icons/128x128.png ]; then
   cp src-tauri/icons/128x128.png flatpak-source/singularity.png
 fi
 
 # 6. Create singularity-wrapper script for Flatpak
+# Note: GDK_BACKEND=x11 forces X11 to avoid Wayland WebKit rendering issues
+# Do NOT set EGL_PLATFORM - let the system auto-detect to avoid EGL init failures
 cat > flatpak-source/singularity-wrapper << 'EOF'
 #!/bin/bash
-export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
 export GDK_BACKEND=x11
-export EGL_PLATFORM=x11
-export ATK_ADAPTOR=dbus
-export WEBKIT_EXEC_PATH="/app/libexec"
 exec /app/bin/singularity "$@"
 EOF
 chmod +x flatpak-source/singularity-wrapper

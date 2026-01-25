@@ -8,7 +8,9 @@
     "--share=network",
     "--share=ipc",
     "--socket=x11",
+    "--socket=wayland",
     "--socket=fallback-x11",
+    "--socket=pulseaudio",
     "--device=dri",
     "--filesystem=xdg-run/dri",
     "--filesystem=home",
@@ -17,7 +19,6 @@
     "--filesystem=xdg-desktop",
     "--env=GDK_BACKEND=x11",
     "--env=ATK_ADAPTOR=dbus",
-    "--env=WEBKIT_EXEC_PATH=/app/libexec",
     "--talk-name=org.freedesktop.Notifications",
     "--talk-name=org.gtk.vfs.*",
     "--filesystem=xdg-run/gvfsd"

@@ -44,7 +44,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Build and Package Flatpak
+      - name: Build Tauri Binary
         run: |
           # Clean previous build artifacts
           echo "Cleaning previous build artifacts..."
@@ -206,12 +206,11 @@ jobs:
           echo "Flatpak will use GNOME runtime libraries (no bundled libs)"
 
           # Create singularity-wrapper script for Flatpak
+          # Note: GDK_BACKEND=x11 forces X11 to avoid Wayland WebKit rendering issues
+          # Do NOT set EGL_PLATFORM - let the system auto-detect to avoid EGL init failures
           cat > flatpak-source/singularity-wrapper << 'EOF'
           #!/bin/bash
           export GDK_BACKEND=x11
-          export EGL_PLATFORM=x11
-          export ATK_ADAPTOR=dbus
-          export WEBKIT_EXEC_PATH="/app/libexec"
           exec /app/bin/singularity "$@"
           EOF
           chmod +x flatpak-source/singularity-wrapper
