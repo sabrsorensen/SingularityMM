@@ -1,8 +1,8 @@
 {
   "app-id": "com.syzzle.singularity",
-  "runtime": "org.freedesktop.Platform",
-  "runtime-version": "25.08",
-  "sdk": "org.freedesktop.Sdk",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "49",
+  "sdk": "org.gnome.Sdk",
   "command": "singularity-wrapper",
   "finish-args": [
     "--share=network",
@@ -10,31 +10,37 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--device=dri",
+    "--filesystem=xdg-run/dri",
+    "--env=LIBGL_DEBUG=verbose",
     "--filesystem=home",
     "--filesystem=xdg-download",
     "--filesystem=xdg-documents",
     "--filesystem=xdg-desktop",
-    "--env=EGL_PLATFORM=x11",
     "--env=ATK_ADAPTOR=dbus",
-    "--env=WEBKIT_EXEC_PATH=/app/libexec/webkit2gtk-4.1",
+    "--env=WEBKIT_EXEC_PATH=/app/libexec",
     "--env=WEBKIT_DISABLE_COMPOSITING_MODE=1",
     "--talk-name=org.freedesktop.Notifications",
     "--talk-name=org.gtk.vfs.*",
     "--filesystem=xdg-run/gvfsd"
   ],
-  "modules": [
-    {
-      "name": "webkit-helpers",
-      "buildsystem": "simple",
-      "build-commands": [
-        "mkdir -p /app/libexec/webkit2gtk-4.1",
-        "if [ -f /usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess ]; then install -m755 /usr/libexec/webkit2gtk-4.1/WebKitNetworkProcess /app/libexec/webkit2gtk-4.1/; fi",
-        "if [ -f /usr/libexec/webkit2gtk-4.1/WebKitWebProcess ]; then install -m755 /usr/libexec/webkit2gtk-4.1/WebKitWebProcess /app/libexec/webkit2gtk-4.1/; fi",
-        "if [ -f /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess ]; then install -m755 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess /app/libexec/webkit2gtk-4.1/; fi",
-        "if [ -f /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess ]; then install -m755 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess /app/libexec/webkit2gtk-4.1/; fi",
-        "ls -la /app/libexec/webkit2gtk-4.1/ || echo 'No WebKit helpers found in system'"
-      ]
+  "add-extensions": {
+    "org.freedesktop.Platform.GL.default": {
+      "directory": "lib/GL"
     },
+    "org.freedesktop.Platform.GL.nvidia": {
+      "directory": "lib/GL-nvidia"
+    },
+    "org.freedesktop.Platform.VAAPI.Intel": {
+      "directory": "lib/vaapi-intel"
+    },
+    "org.freedesktop.Platform.VAAPI.AMD": {
+      "directory": "lib/vaapi-amd"
+    },
+    "org.freedesktop.Platform.VAAPI.Nvidia": {
+      "directory": "lib/vaapi-nvidia"
+    }
+  },
+  "modules": [
     {
       "name": "singularity",
       "buildsystem": "simple",
@@ -61,6 +67,7 @@
       "name": "libcanberra",
       "buildsystem": "autotools",
       "config-opts": ["--enable-gtk3"],
+      "make-install-args": ["systemdsystemunitdir=/app/share/systemd/system"],
       "sources": [
         {
           "type": "archive",
@@ -72,12 +79,12 @@
     {
       "name": "util-linux",
       "buildsystem": "meson",
-      "config-opts": ["-Dlastlog=false", "-Dpam=false"],
+      "config-opts": ["-Dsystemd=disabled", "-Dbuild-bash-completion=disabled"],
       "sources": [
         {
           "type": "archive",
-          "url": "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.xz",
-          "sha256": "d57a626081f9ead02fa44c63a6af162ec19c58f53e993f206ab7c3a6641c2cd7"
+          "url": "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.41/util-linux-2.41.3.tar.xz",
+          "sha256": "3330d873f0fceb5560b89a7dc14e4f3288bbd880e96903ed9b50ec2b5799e58b"
         }
       ]
     }
