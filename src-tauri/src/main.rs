@@ -3290,6 +3290,15 @@ fn is_running_on_steam_deck() -> bool {
 
 // --- MAIN FUNCTION ---
 fn main() {
+    // Force X11 backend on Linux to avoid Wayland rendering issues with WebKitGTK
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("GDK_BACKEND").is_err() {
+            std::env::set_var("GDK_BACKEND", "x11");
+            println!("[INFO] Forced GDK_BACKEND=x11 for WebKitGTK compatibility");
+        }
+    }
+
     // Steam Deck compatibility fixes
     configure_steam_deck_environment();
 

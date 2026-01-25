@@ -21,6 +21,7 @@ const appWindow = getCurrentWindow();
 let NEXUS_API_KEY = "";
 const CURATED_LIST_URL = "https://raw.githubusercontent.com/Syzzle07/SingularityMM/refs/heads/data/curated/curated_list.json";
 let curatedData = [];
+let curatedDataPromise = null;
 let downloadHistory = [];
 const nexusFileCache = new Map();
 
@@ -764,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Network Tasks (Background - Don't await immediately)
     const loginPromise = validateLoginState();
-    const curatedDataPromise = fetchCuratedData();
+    curatedDataPromise = fetchCuratedData();
 
     // Local I/O Tasks (Critical - Await group)
     const langPromise = i18n.loadLanguage(savedLang);
@@ -4647,10 +4648,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const installedList = await invoke('get_profile_mod_list', { profileName: appState.activeProfile });
     }
 
+    // 2. Wait for curated data to finish loading if it hasn't already
+    if (curatedDataPromise) {
+      await curatedDataPromise;
+    }
+
     if (browseGridContainer.childElementCount === 0) {
       fetchAndRenderBrowseGrid();
     } else {
-      // 2. Refresh the badges on existing cards
+      // 3. Refresh the badges on existing cards
       refreshBrowseTabBadges();
     }
   });
