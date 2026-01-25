@@ -191,24 +191,23 @@ jobs:
         run: |
           # Prepare flatpak-source directory
           echo "Preparing flatpak-source directory..."
-          mkdir -p flatpak-source
+          mkdir -p flatpak-source/lib
 
-          # Copy manifest
-          cp com.syzzle.singularity.json flatpak-source/
-
-          # Copy binary and libraries
+          # Copy binary only (no libraries - Flatpak runtime provides them)
           cp steam-deck-package/bin/Singularity flatpak-source/
-          cp -r steam-deck-package/lib flatpak-source/
 
           # Copy icon
           if [ -f src-tauri/icons/128x128.png ]; then
             cp src-tauri/icons/128x128.png flatpak-source/singularity.png
           fi
 
+          # For Flatpak, we do NOT bundle any libraries - rely entirely on GNOME runtime
+          # The GNOME Platform runtime provides all GTK, WebKit, and system libraries
+          echo "Flatpak will use GNOME runtime libraries (no bundled libs)"
+
           # Create singularity-wrapper script for Flatpak
           cat > flatpak-source/singularity-wrapper << 'EOF'
           #!/bin/bash
-          export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
           export GDK_BACKEND=x11
           export EGL_PLATFORM=x11
           export ATK_ADAPTOR=dbus
@@ -229,6 +228,8 @@ jobs:
           Keywords=mods;modding;games;
           EOF
 
+          echo "Flatpak source contents:"
+          ls -la flatpak-source/
           echo "Flatpak source prepared successfully"
 
       - name: Build Flatpak
