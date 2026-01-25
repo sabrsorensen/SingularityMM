@@ -206,11 +206,12 @@ jobs:
           echo "Flatpak will use GNOME runtime libraries (no bundled libs)"
 
           # Create singularity-wrapper script for Flatpak
-          # Note: GDK_BACKEND=x11 forces X11 to avoid Wayland WebKit rendering issues
-          # Do NOT set EGL_PLATFORM - let the system auto-detect to avoid EGL init failures
+          # For Flatpak, let GTK auto-detect the backend (Wayland or X11)
+          # The GNOME runtime's WebKitGTK should handle Wayland correctly
+          # Set SINGULARITY_FLATPAK to signal to the Rust code not to force X11
           cat > flatpak-source/singularity-wrapper << 'EOF'
           #!/bin/bash
-          export GDK_BACKEND=x11
+          export SINGULARITY_FLATPAK=1
           exec /app/bin/singularity "$@"
           EOF
           chmod +x flatpak-source/singularity-wrapper

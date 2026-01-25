@@ -3291,11 +3291,17 @@ fn is_running_on_steam_deck() -> bool {
 // --- MAIN FUNCTION ---
 fn main() {
     // Force X11 backend on Linux to avoid Wayland rendering issues with WebKitGTK
+    // Skip this for Flatpak - the GNOME runtime's WebKitGTK handles Wayland correctly
     #[cfg(target_os = "linux")]
     {
-        if std::env::var("GDK_BACKEND").is_err() {
+        let is_flatpak = std::env::var("FLATPAK_ID").is_ok()
+            || std::env::var("SINGULARITY_FLATPAK").is_ok();
+
+        if !is_flatpak && std::env::var("GDK_BACKEND").is_err() {
             std::env::set_var("GDK_BACKEND", "x11");
             println!("[INFO] Forced GDK_BACKEND=x11 for WebKitGTK compatibility");
+        } else if is_flatpak {
+            println!("[INFO] Running in Flatpak - using native display backend");
         }
     }
 
