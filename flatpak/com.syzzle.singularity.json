@@ -43,16 +43,18 @@
       "name": "singularity",
       "buildsystem": "simple",
       "build-commands": [
-        "mkdir -p /app/bin /app/share/applications /app/share/icons/hicolor/128x128/apps",
+        "mkdir -p /app/bin /app/lib/Singularity/locales /app/share/applications /app/share/icons/hicolor/128x128/apps /app/share/metainfo",
         "install -m755 Singularity /app/bin/singularity",
         "install -m755 singularity-wrapper /app/bin/singularity-wrapper",
+        "if [ -d locales ]; then install -m644 locales/*.json /app/lib/Singularity/locales/; fi",
         "install -m644 singularity.desktop /app/share/applications/com.syzzle.singularity.desktop",
-        "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png"
+        "install -m644 singularity.png /app/share/icons/hicolor/128x128/apps/com.syzzle.singularity.png",
+        "install -m644 singularity.metainfo.xml /app/share/metainfo/com.syzzle.singularity.metainfo.xml"
       ],
       "sources": [
         {
           "type": "dir",
-          "path": "flatpak-source"
+          "path": "../flatpak-source"
         }
       ]
     }

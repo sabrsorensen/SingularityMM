@@ -849,9 +849,37 @@ fn get_all_mods_for_render(app: AppHandle) -> Result<Vec<ModRenderData>, String>
     let game_path =
         find_game_path().ok_or_else(|| "Could not find game installation path.".to_string())?;
     let mods_path = game_path.join("GAMEDATA").join("MODS");
-    let settings_file_path = game_path.join("Binaries").join("SETTINGS").join("GCMODSETTINGS.MXML");
+
+    let settings_dir = game_path.join("Binaries").join("SETTINGS");
+    let settings_file_path = settings_dir.join("GCMODSETTINGS.MXML");
+
+    // Debug: List contents of Binaries and SETTINGS
+    //let binaries_dir = game_path.join("Binaries");
+    //log_internal(&app, "DEBUG", &format!("Checking for Binaries dir at: {}", binaries_dir.display()));
+    /*
+    match std::fs::read_dir(&binaries_dir) {
+        Ok(entries) => {
+            let files: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+            log_internal(&app, "DEBUG", &format!("Binaries dir contents: {:?}", files));
+        },
+        Err(e) => {
+            log_internal(&app, "DEBUG", &format!("Failed to read Binaries dir: {}", e));
+        }
+    }*/
+    //log_internal(&app, "DEBUG", &format!("Checking for SETTINGS dir at: {}", settings_dir.display()));
+    /*
+    match std::fs::read_dir(&settings_dir) {
+        Ok(entries) => {
+            let files: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+            log_internal(&app, "DEBUG", &format!("SETTINGS dir contents: {:?}", files));
+        },
+        Err(e) => {
+            log_internal(&app, "DEBUG", &format!("Failed to read SETTINGS dir: {}", e));
+        }
+    }*/
 
     if !settings_file_path.exists() {
+        log_internal(&app, "DEBUG", &format!("GCMODSETTINGS.MXML not found at: {}", settings_file_path.display()));
         return Ok(Vec::new());
     }
 
@@ -871,11 +899,34 @@ fn get_all_mods_for_render(app: AppHandle) -> Result<Vec<ModRenderData>, String>
         }
     }
 
-    // 2. Read and Parse XML
-    let xml_content = fs::read_to_string(&settings_file_path)
-        .map_err(|e| format!("Failed to read GCMODSETTINGS.MXML: {}", e))?;
-    let mut root: SettingsData =
-        from_str(&xml_content).map_err(|e| format!("Failed to parse GCMODSETTINGS.MXML: {}", e))?;
+
+    // 2. Read and Parse XML with extra debug
+    log_internal(&app, "DEBUG", &format!("Attempting to read GCMODSETTINGS.MXML at: {}", settings_file_path.display()));
+    let xml_content = match fs::read_to_string(&settings_file_path) {
+        Ok(content) => {
+            log_internal(&app, "DEBUG", &format!("Read GCMODSETTINGS.MXML successfully. Content length: {} bytes", content.len()));
+            // Dump the first 2048 bytes (or less) for debug
+            //let dump_len = content.len().min(2048);
+            //let dump = &content[..dump_len];
+            //log_internal(&app, "DEBUG", &format!("GCMODSETTINGS.MXML dump (first {} bytes):\n{}", dump_len, dump));
+            content
+        },
+        Err(e) => {
+            log_internal(&app, "ERROR", &format!("Failed to read GCMODSETTINGS.MXML: {}", e));
+            return Err(format!("Failed to read GCMODSETTINGS.MXML: {}", e));
+        }
+    };
+    log_internal(&app, "DEBUG", "Parsing GCMODSETTINGS.MXML...");
+    let mut root: SettingsData = match from_str(&xml_content) {
+        Ok(parsed) => {
+            log_internal(&app, "DEBUG", "Parsed GCMODSETTINGS.MXML successfully.");
+            parsed
+        },
+        Err(e) => {
+            log_internal(&app, "ERROR", &format!("Failed to parse GCMODSETTINGS.MXML: {}", e));
+            return Err(format!("Failed to parse GCMODSETTINGS.MXML: {}", e));
+        }
+    };
 
     let mut dirty = false; // Track if we need to save changes
 

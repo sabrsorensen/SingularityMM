@@ -48,7 +48,7 @@ jobs:
         run: |
           # Clean previous build artifacts
           echo "Cleaning previous build artifacts..."
-          rm -rf flatpak-build flatpak-repo .flatpak-builder steam-deck-package flatpak-source
+          rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-package flatpak-source
 
           # Build Tauri binary without updater
           echo "Building Tauri binary..."
@@ -56,15 +56,15 @@ jobs:
 
           # Create packaging directory
           echo "Preparing package structure..."
-          mkdir -p steam-deck-package/bin steam-deck-package/lib
+          mkdir -p flatpak-package/bin flatpak-package/lib
 
           # Copy the binary
           echo "Copying Singularity binary..."
-          cp src-tauri/target/release/Singularity steam-deck-package/bin/
+          cp src-tauri/target/release/Singularity flatpak-package/bin/
 
           # Analyze and copy dynamic library dependencies
           echo "Analyzing binary dependencies..."
-          ldd steam-deck-package/bin/Singularity | grep "=> /" | awk '{print $3}' | sort -u > all_deps.txt
+          ldd flatpak-package/bin/Singularity | grep "=> /" | awk '{print $3}' | sort -u > all_deps.txt
 
           # Copy dependencies, excluding core system libraries that Flatpak runtime provides
           while read -r lib; do
@@ -72,9 +72,9 @@ jobs:
               libname=$(basename "$lib")
               # Exclude core system libraries, compiler runtimes, and common runtime libraries
               if [[ ! "$libname" =~ ^(libc\.so\.|libdl\.so\.|libpthread\.so\.|libm\.so\.|librt\.so\.|libresolv\.so\.|libnss_.*\.so\.|libutil\.so\.|ld-linux.*|libstdc\+\+\.so\.|libgcc_s\.so\.|libgtk-3\.so\.|libgdk-3\.so\.|libgdk_pixbuf-2\.0\.so\.|libglib-2\.0\.so\.|libgobject-2\.0\.so\.|libpango-1\.0\.so\.|libpangocairo-1\.0\.so\.|libpangoft2-1\.0\.so\.|libatk-1\.0\.so\.|libatk-bridge-2\.0\.so\.|libcairo\.so\.|libcairo-gobject\.so\.|libgio-2\.0\.so\.|libmount\.so\.1$|libblkid\.so\.1$|libsystemd\.so\.|libatspi\.so\.|libjson-glib-1.0\.so\.|libgpg-error\.so\.|libgcrypt\.so\.|libwebkit2gtk.*|libjavascriptcoregtk.*|libc\.so.*).*$ ]]; then
-                if [[ ! -f "steam-deck-package/lib/$libname" ]]; then
-                  echo "Copying $lib -> steam-deck-package/lib/$libname"
-                  cp "$lib" "steam-deck-package/lib/$libname" || echo "Failed to copy $lib"
+                if [[ ! -f "flatpak-package/lib/$libname" ]]; then
+                  echo "Copying $lib -> flatpak-package/lib/$libname"
+                  cp "$lib" "flatpak-package/lib/$libname" || echo "Failed to copy $lib"
                 fi
               else
                 echo "Excluding runtime library: $libname"
@@ -83,12 +83,12 @@ jobs:
           done < all_deps.txt
 
           # Remove problematic libraries that conflict with Flatpak runtime
-          rm -f steam-deck-package/lib/libmount.so.1 steam-deck-package/lib/libblkid.so.1
+          rm -f flatpak-package/lib/libmount.so.1 flatpak-package/lib/libblkid.so.1
 
-          echo "Total libraries bundled: $(ls -1 steam-deck-package/lib/ 2>/dev/null | wc -l)"
+          echo "Total libraries bundled: $(ls -1 flatpak-package/lib/ 2>/dev/null | wc -l)"
 
           # Create launcher script for tarball/AppImage
-          cat > steam-deck-package/singularity-mm << 'EOF'
+          cat > flatpak-package/singularity-mm << 'EOF'
           #!/bin/bash
           # Steam Deck and Linux compatibility
           export GDK_BACKEND=x11
@@ -104,26 +104,21 @@ jobs:
           # Run the application
           exec "$DIR/bin/Singularity" "$@"
           EOF
-          chmod +x steam-deck-package/singularity-mm
+          chmod +x flatpak-package/singularity-mm
 
-          # Create desktop entry for tarball
-          cat > steam-deck-package/singularity-mm.desktop << 'EOF'
-          [Desktop Entry]
-          Name=Singularity Mod Manager
-          Exec=./singularity-mm
-          Icon=singularity-mm
-          Type=Application
-          Categories=Game;Utility;
-          Comment=Manage your game modifications
-          EOF
+          # Create desktop entry for tarball from template
+          sed \
+            -e 's|^Exec=.*$|Exec=./singularity-mm|' \
+            -e 's|^Icon=.*$|Icon=singularity-mm|' \
+            flatpak/singularity-mm.desktop.template > flatpak-package/singularity-mm.desktop
 
           echo "Package contents:"
-          find steam-deck-package -type f | sort
-          echo "Total package size: $(du -sh steam-deck-package/)"
+          find flatpak-package -type f | sort
+          echo "Total package size: $(du -sh flatpak-package/)"
 
       - name: Create Tarball
         run: |
-          tar -czf SingularityMM-Linux.tar.gz -C steam-deck-package .
+          tar -czf SingularityMM-Linux.tar.gz -C flatpak-package .
           echo "Created tarball: $(ls -lh SingularityMM-Linux.tar.gz)"
 
       - name: Download AppImageTool
@@ -137,7 +132,7 @@ jobs:
           mkdir -p AppDir/usr/bin AppDir/usr/lib
 
           # Copy files to AppDir
-          cp -r steam-deck-package/* AppDir/usr/
+          cp -r flatpak-package/* AppDir/usr/
 
           # Copy icon from Tauri icons
           cp src-tauri/icons/128x128.png AppDir/singularity-mm.png
@@ -159,16 +154,11 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
-          # Create proper desktop entry for AppImage
-          cat > AppDir/singularity-mm.desktop << 'EOF'
-          [Desktop Entry]
-          Name=Singularity Mod Manager
-          Exec=Singularity
-          Icon=singularity-mm
-          Type=Application
-          Categories=Utility;Game;
-          Comment=Manage your game modifications
-          EOF
+          # Create proper desktop entry for AppImage from template
+          sed \
+            -e 's|^Exec=.*$|Exec=Singularity|' \
+            -e 's|^Icon=.*$|Icon=singularity-mm|' \
+            flatpak/singularity-mm.desktop.template > AppDir/singularity-mm.desktop
 
           # Create AppImage
           ./appimagetool --appimage-extract-and-run AppDir SingularityMM-Linux.AppImage
@@ -194,7 +184,7 @@ jobs:
           mkdir -p flatpak-source/lib
 
           # Copy binary only (no libraries - Flatpak runtime provides them)
-          cp steam-deck-package/bin/Singularity flatpak-source/
+          cp flatpak-package/bin/Singularity flatpak-source/
 
           # Copy icon
           if [ -f src-tauri/icons/128x128.png ]; then
@@ -216,17 +206,11 @@ jobs:
           EOF
           chmod +x flatpak-source/singularity-wrapper
 
-          # Create singularity.desktop for Flatpak
-          cat > flatpak-source/singularity.desktop << 'EOF'
-          [Desktop Entry]
-          Name=Singularity Mod Manager
-          Exec=singularity-wrapper
-          Icon=com.syzzle.singularity
-          Type=Application
-          Categories=Utility;Game;
-          Comment=Manage your game modifications
-          Keywords=mods;modding;games;
-          EOF
+          # Create singularity.desktop for Flatpak from template
+          cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
+
+          # Copy metainfo.xml for Flatpak
+          cp flatpak/com.syzzle.singularity.metainfo.xml flatpak-source/
 
           echo "Flatpak source contents:"
           ls -la flatpak-source/
@@ -244,7 +228,7 @@ jobs:
             --force-clean \
             --repo=flatpak-repo \
             flatpak-build \
-            com.syzzle.singularity.json
+            flatpak/com.syzzle.singularity.json
 
           echo "Creating Flatpak bundle..."
           flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.singularity

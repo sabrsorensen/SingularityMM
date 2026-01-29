@@ -39,12 +39,12 @@ async function loadImageViaTauri(imgElement, url) {
       method: 'GET',
       headers: {}
     });
-    
+
     if (response.status >= 200 && response.status < 300) {
       // The response body is base64 encoded for images
       const contentType = response.headers['content-type'] || 'image/jpeg';
       const dataURL = `data:${contentType};base64,${response.body}`;
-      
+
       imgElement.src = dataURL;
     } else {
       throw new Error(`HTTP ${response.status}`);
@@ -276,25 +276,22 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('focus', async () => {
     // Only run if we are fully initialized and on the "My Mods" view
     if (appState.activeProfile && !appState.isPopulating && !myModsView.classList.contains('hidden')) {
-
-      console.log("App focused. Syncing with disk...");
-
+      console.log("[FOCUS] App focused. Syncing with disk...");
       try {
         // 1. Call Rust: This cleans the file on disk and returns the correct list
+        console.log("[FOCUS] Calling get_all_mods_for_render from focus handler");
         const cleanList = await invoke('get_all_mods_for_render');
-
         // 2. Reload the in-memory XML from the disk
+        console.log("[FOCUS] Received cleanList from get_all_mods_for_render, length:", cleanList.length);
         if (appState.currentFilePath) {
           const freshContent = await readTextFile(appState.currentFilePath);
           appState.xmlDoc = new DOMParser().parseFromString(freshContent, "application/xml");
         }
-
         // 3. Update the UI with the clean list
+        console.log("[FOCUS] Calling renderModList with cleanList");
         await renderModList(cleanList);
-
         // 4. Update Profile JSON to match the new reality
         await saveCurrentProfile();
-
         // 5. Sync Download History visuals if the modal happens to be open
         if (!downloadHistoryModalOverlay.classList.contains('hidden')) {
           await syncDownloadHistoryWithProfile(appState.activeProfile);
@@ -492,17 +489,23 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         // 1. Load English Base
         const enPath = await resolveResource(`locales/en.json`);
+        console.log('[i18n] Resolved en.json path:', enPath);
         const enContent = await readTextFile(enPath);
+        console.log('[i18n] en.json content:', enContent.slice(0, 200));
         const enData = JSON.parse(enContent);
 
         if (lang === 'en') {
           appState.currentTranslations = enData;
+          console.log('[i18n] Set currentTranslations to enData:', Object.keys(enData));
         } else {
           // 2. Load Target & Merge
           const resourcePath = await resolveResource(`locales/${lang}.json`);
+          console.log(`[i18n] Resolved ${lang}.json path:`, resourcePath);
           const content = await readTextFile(resourcePath);
+          console.log(`[i18n] ${lang}.json content:`, content.slice(0, 200));
           const targetData = JSON.parse(content);
           appState.currentTranslations = { ...enData, ...targetData };
+          console.log(`[i18n] Set currentTranslations to merged en+${lang}:`, Object.keys(appState.currentTranslations));
         }
 
         localStorage.setItem('selectedLanguage', lang);
@@ -511,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
         this.updateUI();
 
       } catch (e) {
-        console.error(`Failed to load language file for ${lang}`, e);
+        console.error(`[i18n] Failed to load language file for ${lang}`, e);
         if (lang !== 'en') await this.loadLanguage('en');
       }
     },
@@ -571,7 +574,13 @@ document.addEventListener('DOMContentLoaded', () => {
       this.adjustBannerWidths();
     },
     get(key, placeholders = {}) {
-      let text = appState.currentTranslations[key] || key;
+      const value = appState.currentTranslations[key];
+      if (typeof value === 'undefined') {
+        console.warn(`[i18n.get] Missing translation for key: '${key}'`);
+      } else {
+        console.log(`[i18n.get] Key: '${key}', Value: '${value}'`);
+      }
+      let text = value || key;
       for (const [placeholder, value] of Object.entries(placeholders)) {
         text = text.replace(`{{${placeholder}}}`, value);
       }
@@ -591,8 +600,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textElement) {
               const calculatedWidth = textElement.scrollWidth + HORIZONTAL_PADDING;
               const finalWidth = Math.max(config.minWidth, calculatedWidth);
+              console.log(`[BannerWidth] Setting #${config.id} to width: ${finalWidth}px (textWidth: ${textElement.scrollWidth})`);
               banner.style.width = `${finalWidth}px`;
+            } else {
+              console.warn(`[BannerWidth] No .banner-text found in #${config.id}`);
             }
+          } else {
+            console.warn(`[BannerWidth] No element found with id: #${config.id}`);
           }
         });
       });
@@ -764,7 +778,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 1. START TASKS IN PARALLEL ---
 
     // Network Tasks (Background - Don't await immediately)
-    const loginPromise = validateLoginState();
+    // Note: validateLoginState() is deferred until after translations load,
+    // because it calls i18n.get() which needs currentTranslations to be populated.
     curatedDataPromise = fetchCuratedData();
 
     // Local I/O Tasks (Critical - Await group)
@@ -780,6 +795,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 2. AWAIT CRITICAL SETUP ---
     // We block UI rendering only for these essentials
     await Promise.all([langPromise, historyPromise, migrationPromise]);
+
+    // Start login validation after translations are loaded (uses i18n.get())
+    const loginPromise = validateLoginState();
 
     // --- 3. INITIALIZE UI COMPONENTS ---
 
@@ -845,11 +863,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hasGamePath && appState.settingsPath) {
       try {
         const settingsFilePath = await join(appState.settingsPath, 'Binaries', 'SETTINGS', 'GCMODSETTINGS.MXML');
+        console.log('[AutoLoad] Attempting to read settings file at:', settingsFilePath);
+        if (!settingsFilePath) {
+          window.addAppLog('[AutoLoad][ERROR] settingsFilePath is undefined/null!', 'ERROR');
+          filePathLabel.textContent = '[AutoLoad][ERROR] settingsFilePath is undefined/null!';
+        }
         const content = await readTextFile(settingsFilePath);
-        await loadXmlContent(content, settingsFilePath);
+        if (!content || content.length < 10) {
+          window.addAppLog(`[AutoLoad][ERROR] Settings file at ${settingsFilePath} is empty or too short!`, 'ERROR');
+          filePathLabel.textContent = `[AutoLoad][ERROR] Settings file at ${settingsFilePath} is empty or too short!`;
+        } else {
+          console.log('[AutoLoad] Successfully read settings file, first 200 chars:', content.slice(0, 200));
+          await loadXmlContent(content, settingsFilePath);
+          console.log('[AutoLoad] loadXmlContent completed for:', settingsFilePath);
+          window.addAppLog(`[AutoLoad] Successfully loaded and parsed settings file: ${settingsFilePath}`, 'INFO');
+        }
       } catch (e) {
-        console.warn("Could not auto-load settings file.", e);
+        window.addAppLog(`[AutoLoad][ERROR] Could not auto-load settings file: ${e}`, 'ERROR');
+        filePathLabel.textContent = `[AutoLoad][ERROR] Could not auto-load settings file: ${e}`;
+        console.warn('[AutoLoad] Could not auto-load settings file.', e);
       }
+    } else {
+      window.addAppLog(`[AutoLoad][DEBUG] Skipped auto-load: hasGamePath=${hasGamePath}, settingsPath=${appState.settingsPath}`, 'DEBUG');
+      if (!hasGamePath) filePathLabel.textContent = '[AutoLoad][DEBUG] No game path detected.';
+      else if (!appState.settingsPath) filePathLabel.textContent = '[AutoLoad][DEBUG] No settings path detected.';
     }
 
     // --- 6. SETUP LISTENERS ---
@@ -952,31 +989,43 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadXmlContent = async (content, path) => {
-    appState.currentFilePath = path;
-    const fileNameWithExt = await basename(appState.currentFilePath);
-    const fileNameWithoutExt = fileNameWithExt.slice(0, fileNameWithExt.lastIndexOf('.'));
-    filePathLabel.textContent = i18n.get('editingFile', { fileName: fileNameWithoutExt });
-    appState.xmlDoc = new DOMParser().parseFromString(content, "application/xml");
-    await renderModList();
+    try {
+      console.log('[loadXmlContent] Called with path:', path);
+      appState.currentFilePath = path;
+      const fileNameWithExt = await basename(appState.currentFilePath);
+      const fileNameWithoutExt = fileNameWithExt.slice(0, fileNameWithExt.lastIndexOf('.'));
+      filePathLabel.textContent = i18n.get('editingFile', { fileName: fileNameWithoutExt });
+      appState.xmlDoc = new DOMParser().parseFromString(content, "application/xml");
+      console.log('[loadXmlContent] XML parsed, root node:', appState.xmlDoc.documentElement.nodeName);
+      await renderModList();
+      console.log('[loadXmlContent] renderModList completed');
+    } catch (e) {
+      console.error('[loadXmlContent] Error:', e);
+    }
   };
 
   const renderModList = async (directData = null) => {
     if (!directData && !appState.xmlDoc) return;
-
+    console.log('[renderModList] Called. directData:', !!directData);
     const scrollPos = modListContainer.scrollTop;
     appState.isPopulating = true;
     modListContainer.innerHTML = '';
     appState.installedModsMap.clear();
-
     const suppressUntracked = localStorage.getItem('suppressUntrackedWarning') === 'true';
-
     const disableAllNode = appState.xmlDoc.querySelector('Property[name="DisableAllMods"]');
     if (disableAllNode) {
       disableAllSwitch.checked = disableAllNode.getAttribute('value').toLowerCase() === 'true';
       disableAllSwitch.disabled = false;
     }
-
-    const modsToRender = directData ? directData : await invoke('get_all_mods_for_render');
+    let modsToRender;
+    if (directData) {
+      console.log('[renderModList] Using directData, length:', directData.length);
+      modsToRender = directData;
+    } else {
+      console.log('[renderModList] Calling get_all_mods_for_render from renderModList');
+      modsToRender = await invoke('get_all_mods_for_render');
+      console.log('[renderModList] Received modsToRender from get_all_mods_for_render, length:', modsToRender.length);
+    }
 
     appState.modDataCache.clear();
     modsToRender.forEach(modData => {
@@ -2803,14 +2852,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const thumbnailImg = card.querySelector('.mod-card-thumbnail');
       const imageUrl = modData.picture_url || '/src/assets/placeholder.png';
-      
+
       // Load images through Tauri HTTP command to bypass WebKit restrictions
       if (imageUrl && imageUrl.startsWith('http')) {
         loadImageViaTauri(thumbnailImg, imageUrl);
       } else {
         thumbnailImg.src = imageUrl;
       }
-      
+
       titleElement.title = modData.name;
 
       const versionSpan = `<span class="mod-card-version-inline">${modData.version || ''}</span>`;
@@ -2838,16 +2887,16 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openModDetailPanel(modData) {
     modDetailName.textContent = modData.name;
     modDetailName.dataset.modId = modData.mod_id;
-    
+
     const imageUrl = modData.picture_url || '/src/assets/placeholder.png';
-    
+
     // Load images through Tauri HTTP command for external URLs
     if (imageUrl && imageUrl.startsWith('http')) {
       loadImageViaTauri(modDetailImage, imageUrl);
     } else {
       modDetailImage.src = imageUrl;
     }
-    
+
     modDetailDescription.innerHTML = bbcodeToHtml(modData.description) || '<p>No description available.</p>';
     modDetailAuthor.textContent = modData.author || 'Unknown';
     modDetailVersion.textContent = modData.version || '?.?';
