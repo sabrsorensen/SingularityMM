@@ -492,7 +492,7 @@ fn get_singularity_root(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn get_config_file_path(app: &AppHandle) -> Result<PathBuf, String> {
-    // Keeps config in the standard Tauri app data: %APPDATA%/com.syzzle.singularity/config.json
+    // Keeps config in the standard Tauri app data: %APPDATA%/com.syzzle.Singularity/config.json
     let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     if !app_data.exists() {
         fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;

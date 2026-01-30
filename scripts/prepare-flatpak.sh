@@ -38,7 +38,7 @@ if [ -f src-tauri/icons/128x128.png ]; then
 fi
 
 # Copy metainfo.xml for Flatpak
-cp flatpak/com.syzzle.singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
+cp flatpak/com.syzzle.Singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
 
 # Copy screenshots for Flatpak metainfo
 echo "Copying screenshots for Flatpak..."
@@ -61,7 +61,7 @@ cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
 
 
 echo "Running flatpak-builder..."
-flatpak-builder --repo=flatpak-repo --force-clean flatpak-build flatpak/com.syzzle.singularity.json
+flatpak-builder --repo=flatpak-repo --force-clean flatpak-build flatpak/com.syzzle.Singularity.json
 echo "Creating Flatpak bundle..."
-flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.singularity
+flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
 echo "Flatpak build and bundle complete. Output: SingularityMM.flatpak"

@@ -210,7 +210,7 @@ jobs:
           cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
 
           # Copy metainfo.xml for Flatpak
-          cp flatpak/com.syzzle.singularity.metainfo.xml flatpak-source/
+          cp flatpak/com.syzzle.Singularity.metainfo.xml flatpak-source/
 
           echo "Flatpak source contents:"
           ls -la flatpak-source/
@@ -228,10 +228,10 @@ jobs:
             --force-clean \
             --repo=flatpak-repo \
             flatpak-build \
-            flatpak/com.syzzle.singularity.json
+            flatpak/com.syzzle.Singularity.json
 
           echo "Creating Flatpak bundle..."
-          flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.singularity
+          flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
 
           echo "Flatpak build complete!"
           ls -lh SingularityMM.flatpak
