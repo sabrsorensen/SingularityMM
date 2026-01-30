@@ -49,14 +49,7 @@ jobs:
           # Clean previous build artifacts
           echo "Cleaning previous build artifacts..."
           rm -rf flatpak-build flatpak-repo .flatpak-builder portable-package flatpak-source
-
-          # Build Tauri binary without updater
-          echo "Building Tauri binary..."
-          npm run tauri build -- --no-bundle --config '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'
-
-          # Create packaging directory
-          echo "Preparing package structure..."
-          mkdir -p portable-package/bin portable-package/lib
+          scripts/flatpak/build-binary.sh
 
           # Copy the binary
           echo "Copying Singularity binary..."
@@ -191,52 +184,11 @@ jobs:
 
       - name: Prepare Flatpak Source
         run: |
-          # Prepare flatpak-source directory
-          echo "Preparing flatpak-source directory..."
-          mkdir -p flatpak-source/lib
-
-          # Copy binary only (no libraries - Flatpak runtime provides them)
-          cp portable-package/bin/Singularity flatpak-source/
-
-          # Copy icon
-          if [ -f src-tauri/icons/128x128.png ]; then
-            cp src-tauri/icons/128x128.png flatpak-source/singularity.png
-          fi
-
-          # For Flatpak, we do NOT bundle any libraries - rely entirely on GNOME runtime
-          # The GNOME Platform runtime provides all GTK, WebKit, and system libraries
-          echo "Flatpak will use GNOME runtime libraries (no bundled libs)"
-
-          # Copy singularity-wrapper script for Flatpak
-          cp flatpak/singularity-wrapper flatpak-source/singularity-wrapper
-          chmod +x flatpak-source/singularity-wrapper
-
-          # Create singularity.desktop for Flatpak from template
-          cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
-
-          # Copy metainfo.xml for Flatpak
-          cp flatpak/com.syzzle.Singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
-
-          echo "Flatpak source contents:"
-          ls -la flatpak-source/
-          echo "Flatpak source prepared successfully"
+          scripts/flatpak/copy-resources.sh
 
       - name: Build Flatpak
         run: |
-          echo "Building Flatpak with flatpak-builder..."
-
-          # Build using the manifest in flatpak-source
-          flatpak-builder \
-            --user \
-            --install-deps-from=flathub \
-            --disable-rofiles-fuse \
-            --force-clean \
-            --repo=flatpak-repo \
-            flatpak-build \
-            flatpak/com.syzzle.Singularity.json
-
-          echo "Creating Flatpak bundle..."
-          flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
+          scripts/flatpak/build-flatpak.sh
 
           echo "Flatpak build complete!"
           ls -lh SingularityMM.flatpak

@@ -39,6 +39,36 @@
           tauriBuildFlags = [ "--config" src-tauri/tauri.conf.json ];
           tauriBundleType = "appimage"; # Don't need deb or rpm
         });
+
+        packages.flatpakBundle = pkgs.stdenv.mkDerivation {
+          pname = "singularitymm-flatpak";
+          version = version;
+          src = ./.;
+          buildInputs = [ pkgs.flatpak pkgs.flatpak-builder pkgs.bash pkgs.coreutils pkgs.gawk pkgs.findutils pkgs.gnused pkgs.gnutar pkgs.gzip pkgs.jq pkgs.which ];
+          nativeBuildInputs = [ ];
+          unpackPhase = ":";
+          buildPhase = ''
+            set -e
+            export PATH=$PATH:${pkgs.coreutils}/bin:${pkgs.gnused}/bin:${pkgs.gawk}/bin:${pkgs.findutils}/bin:${pkgs.gnutar}/bin:${pkgs.gzip}/bin:${pkgs.jq}/bin:${pkgs.which}/bin
+
+            # Clean previous build artifacts
+            echo "Cleaning previous build artifacts..."
+            rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
+
+            # 1. Build the Tauri project (Rust binary + resources)
+            ./scripts/flatpak/build-binary.sh
+
+            # 2. Prepare flatpak-source directory and copy all resources
+            ./scripts/flatpak/copy-resources.sh
+
+            # 3. Build the Flatpak bundle
+            ./scripts/flatpak/build-flatpak.sh
+          '';
+          installPhase = ''
+            mkdir -p $out
+            cp SingularityMM.flatpak $out/
+          '';
+        };
       }
     );
 }
