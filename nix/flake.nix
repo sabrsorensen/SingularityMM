@@ -5,9 +5,10 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    npmlock2nix.url = "github:nix-community/npmlock2nix";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, npmlock2nix }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
@@ -21,6 +22,10 @@
           mesa at-spi2-atk at-spi2-core nss nspr cups expat zlib libsecret libdbusmenu-gtk3 libnotify
           flatpak flatpak-builder patchelf git
         ];
+        nodeModules = npmlock2nix.lib.${system}.node_modules {
+          src = ../.;
+          nodejs = pkgs.nodejs_24;
+        };
       in
       {
         devShells.default = pkgs.mkShell {
@@ -64,9 +69,8 @@
           pname = "singularitymm-flatpak";
           version = "dev";
           src = ../.;
-          buildInputs = [ nodejs rust ] ++ tauri-deps;
+          buildInputs = [ nodejs rust nodeModules ] ++ tauri-deps;
           buildPhase = ''
-            npm install
             chmod +x ./scripts/prepare-flatpak.sh
             # Patch the shebang to use Nix bash
             sed -i "1s|.*|#!${pkgs.bash}/bin/bash|" ./scripts/prepare-flatpak.sh
