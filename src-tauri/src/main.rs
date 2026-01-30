@@ -2740,7 +2740,6 @@ async fn login_to_nexus(app: tauri::AppHandle) -> Result<String, String> {
 
     // 1. Generate a unique Request ID (UUID)
     let uuid = Uuid::new_v4().to_string();
-    log_internal(&app, "INFO", &format!("Generated UUID: {}", uuid));
 
     // 2. Construct the WebSocket URL
     let sso_url = Url::parse("wss://sso.nexusmods.com").map_err(|e| {

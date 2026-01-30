@@ -16,7 +16,7 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "targets": ["appimage"]
+    "targets": "all"
   },
   "productName": "Singularity",
   "mainBinaryName": "Singularity",
@@ -42,7 +42,7 @@
         "width": 950,
         "height": 900,
         "resizable": true,
-        "decorations": true,
+        "decorations": false,
         "transparent": true,
         "fullscreen": false,
         "visible": false,

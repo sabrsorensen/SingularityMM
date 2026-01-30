@@ -150,11 +150,24 @@ header {
     transition: transform 0.2s ease-in-out, filter 0.2s;
 }
 
-#customCloseBtn {
-    height: 28px;
+.header-controls-right>img:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
 }
 
-.header-controls-right>img:hover {
+.window-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.window-controls>img {
+    height: 28px;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, filter 0.2s;
+}
+
+.window-controls>img:hover {
     transform: scale(1.1);
     filter: brightness(1.2);
 }

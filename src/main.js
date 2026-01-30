@@ -600,13 +600,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (textElement) {
               const calculatedWidth = textElement.scrollWidth + HORIZONTAL_PADDING;
               const finalWidth = Math.max(config.minWidth, calculatedWidth);
-              console.log(`[BannerWidth] Setting #${config.id} to width: ${finalWidth}px (textWidth: ${textElement.scrollWidth})`);
               banner.style.width = `${finalWidth}px`;
-            } else {
-              console.warn(`[BannerWidth] No .banner-text found in #${config.id}`);
             }
-          } else {
-            console.warn(`[BannerWidth] No element found with id: #${config.id}`);
           }
         });
       });
@@ -3192,6 +3187,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Event Listeners ---
 
   customCloseBtn.addEventListener('click', () => appWindow.close());
+
+  document.getElementById('minimizeBtn').addEventListener('click', () => appWindow.minimize());
+  document.getElementById('maximizeBtn').addEventListener('click', async () => {
+    if (await appWindow.isMaximized()) {
+      await appWindow.unmaximize();
+    } else {
+      await appWindow.maximize();
+    }
+  });
+
+  const maximizeBtnImg = document.getElementById('maximizeBtn');
+  const updateMaximizeIcon = async () => {
+    const isMax = await appWindow.isMaximized();
+    maximizeBtnImg.src = isMax ? '/src/assets/icon-restore.png' : '/src/assets/icon-maximize.png';
+    maximizeBtnImg.alt = isMax ? 'Restore' : 'Maximize';
+    maximizeBtnImg.title = isMax ? 'Restore' : 'Maximize';
+  };
+  updateMaximizeIcon();
+  appWindow.onResized(updateMaximizeIcon);
 
   const removeContextMenu = () => {
     if (contextMenu) {
