@@ -2,11 +2,14 @@
 set -e
 
 # Prepare flatpak-source directory and copy all required resources
+# Set SINGULARITY_BIN to override the binary path (default: src-tauri/target/release/Singularity)
+
+SINGULARITY_BIN="${SINGULARITY_BIN:-src-tauri/target/release/Singularity}"
 
 mkdir -p flatpak-source
 
 # Copy binary
-cp src-tauri/target/release/Singularity flatpak-source/Singularity
+cp "$SINGULARITY_BIN" flatpak-source/Singularity
 
 # Copy locales if present
 if [ -d src-tauri/target/release/locales ]; then

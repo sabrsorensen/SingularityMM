@@ -57,6 +57,7 @@
           script = pkgs.writeShellApplication {
             name = "build-flatpak-bundle";
             runtimeInputs = [
+              pkgs.appstream
               pkgs.flatpak
               pkgs.flatpak-builder
               pkgs.coreutils
@@ -76,30 +77,8 @@
               echo "Cleaning previous build artifacts..."
               rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
 
-              mkdir -p flatpak-source
-
-              # Copy binary from Nix-built package
-              cp "${singularity}/bin/Singularity" flatpak-source/Singularity
-              chmod +x flatpak-source/Singularity
-
-              # Copy icon
-              if [ -f src-tauri/icons/128x128.png ]; then
-                cp src-tauri/icons/128x128.png flatpak-source/singularity.png
-              fi
-
-              # Copy metainfo.xml
-              cp flatpak/com.syzzle.Singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
-
-              # Copy screenshots
-              mkdir -p flatpak-source/screenshots
-              cp screenshots/Screenshot*.png flatpak-source/screenshots/ 2>/dev/null || true
-
-              # Copy wrapper script
-              cp flatpak/singularity-wrapper flatpak-source/singularity-wrapper
-              chmod +x flatpak-source/singularity-wrapper
-
-              # Copy desktop file
-              cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
+              # Copy resources using shared script (with Nix-built binary)
+              SINGULARITY_BIN="${singularity}/bin/Singularity" scripts/flatpak/copy-resources.sh
 
               # Ensure required Flatpak runtimes are installed
               REQUIRED_SDK="org.gnome.Sdk//49"
@@ -115,7 +94,7 @@
               fi
 
               echo "Running flatpak-builder..."
-              flatpak-builder --repo=flatpak-repo --force-clean --disable-updates flatpak-build flatpak/com.syzzle.Singularity.json
+              flatpak-builder --repo=flatpak-repo --force-clean --disable-updates --disable-rofiles-fuse flatpak-build flatpak/com.syzzle.Singularity.json
               echo "Creating Flatpak bundle..."
               flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
               echo "Flatpak build and bundle complete. Output: SingularityMM.flatpak"
@@ -134,6 +113,7 @@
               pkgs.coreutils
               pkgs.file
               pkgs.findutils
+              pkgs.gnused
               pkgs.patchelf
               pkgs.wget
               pkgs.zsync
@@ -162,15 +142,10 @@
                 cp src-tauri/icons/128x128.png "$APPDIR/singularity.png"
               fi
 
-              # Create desktop file
-              cat > "$APPDIR/singularity.desktop" <<DESKTOP
-              [Desktop Entry]
-              Name=Singularity
-              Exec=Singularity
-              Icon=singularity
-              Type=Application
-              Categories=Game;
-              DESKTOP
+              # Create desktop file from template (adapt Exec/Icon for AppImage)
+              sed -e 's|^Exec=.*|Exec=Singularity|' \
+                  -e 's|^Icon=.*|Icon=singularity|' \
+                  flatpak/singularity-mm.desktop.template > "$APPDIR/singularity.desktop"
               cp "$APPDIR/singularity.desktop" "$APPDIR/usr/share/applications/"
 
               # Create AppRun
