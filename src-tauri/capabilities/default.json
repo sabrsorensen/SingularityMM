@@ -20,10 +20,6 @@
     "fs:allow-exists",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    {
-      "identifier": "fs:scope",
-      "allow": ["$RESOURCE/**"]
-    },
     "core:window:allow-create",
     "core:window:allow-center",
     "core:window:allow-request-user-attention",

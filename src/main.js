@@ -5,8 +5,17 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
-import { basename, join, resolveResource, appDataDir } from "@tauri-apps/api/path";
+import { basename, join, appDataDir } from "@tauri-apps/api/path";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+
+// --- IMPORT LOCALES ---
+import localeEn from '../src-tauri/locales/en.json';
+import localePt from '../src-tauri/locales/pt.json';
+
+const bundledLocales = {
+  en: localeEn,
+  pt: localePt,
+};
 
 // --- IMPORT ASSETS ---
 import iconSteam from './assets/icon-steam.png';
@@ -492,19 +501,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const i18n = {
     async loadLanguage(lang) {
       try {
-        // 1. Load English Base
-        const enPath = await resolveResource(`locales/en.json`);
-        const enContent = await readTextFile(enPath);
-        const enData = JSON.parse(enContent);
+        // 1. Load English Base (bundled in JS)
+        const enData = bundledLocales.en;
 
-        if (lang === 'en') {
+        if (lang === 'en' || !bundledLocales[lang]) {
           appState.currentTranslations = enData;
         } else {
-          // 2. Load Target & Merge
-          const resourcePath = await resolveResource(`locales/${lang}.json`);
-          const content = await readTextFile(resourcePath);
-          const targetData = JSON.parse(content);
-          appState.currentTranslations = { ...enData, ...targetData };
+          // 2. Merge Target over English
+          appState.currentTranslations = { ...enData, ...bundledLocales[lang] };
         }
 
         localStorage.setItem('selectedLanguage', lang);
@@ -513,8 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
         this.updateUI();
 
       } catch (e) {
-        console.error(`Failed to load language file for ${lang}`, e);
-        if (lang !== 'en') await this.loadLanguage('en');
+        console.error(`Failed to load language for ${lang}`, e);
+        appState.currentTranslations = bundledLocales.en;
       }
     },
     updateUI() {
