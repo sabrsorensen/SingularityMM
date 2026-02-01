@@ -4,16 +4,16 @@ on:
   workflow_call:
     inputs:
       release:
-        description: 'Upload to GitHub Release instead of artifacts'
+        description: "Upload to GitHub Release instead of artifacts"
         type: boolean
         default: false
       tag_name:
-        description: 'Tag name for release upload'
+        description: "Tag name for release upload"
         type: string
-        default: ''
+        default: ""
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
