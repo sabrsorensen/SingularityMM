@@ -56,6 +56,86 @@ jobs:
           files: src-tauri/target/release/Singularity_Portable_${{ github.ref_name }}.exe
 
   publish-linux:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Frontend Dependencies
+        run: npm install
+
+      - name: Build Singularity
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target x86_64-unknown-linux-gnu --config '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'
+
+      - name: Collect Build Artifacts
+        run: |
+          APPIMAGE=$(find src-tauri/target -name '*.AppImage' -type f | head -1)
+          if [[ -z "$APPIMAGE" ]]; then
+            echo "Error: No AppImage found"
+            exit 1
+          fi
+          cp "$APPIMAGE" SingularityMM-Linux.AppImage
+          echo "AppImage: $(ls -lh SingularityMM-Linux.AppImage)"
+
+          DEB=$(find src-tauri/target -name '*.deb' -type f | head -1)
+          if [[ -z "$DEB" ]]; then
+            echo "Error: No .deb found"
+            exit 1
+          fi
+          cp "$DEB" SingularityMM-Linux.deb
+          echo "DEB: $(ls -lh SingularityMM-Linux.deb)"
+
+          RPM=$(find src-tauri/target -name '*.rpm' -type f | head -1)
+          if [[ -n "$RPM" ]]; then
+            cp "$RPM" SingularityMM-Linux.rpm
+            echo "RPM: $(ls -lh SingularityMM-Linux.rpm)"
+          else
+            echo "Warning: No .rpm found, skipping"
+          fi
+
+      - name: Upload Linux Assets to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+          files: |
+            SingularityMM-Linux.AppImage
+            SingularityMM-Linux.deb
+            SingularityMM-Linux.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-flatpak:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,9 +156,6 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            libfribidi-dev \
-            libharfbuzz-dev \
-            patchelf \
             flatpak \
             flatpak-builder
 
@@ -93,84 +170,10 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Build Tauri App
+      - name: Build Binary
         run: |
-          rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
           export PATH="$PATH:$(pwd)/node_modules/.bin"
-          npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'
-
-      - name: Patch AppImage Libraries
-        run: |
-          APPDIR=$(find src-tauri/target/release/bundle/appimage -name '*.AppDir' -type d | head -1)
-          if [[ -n "$APPDIR" ]]; then
-            echo "AppDir found: $APPDIR"
-            APPDIR_LIB="$APPDIR/usr/lib"
-            mkdir -p "$APPDIR_LIB"
-
-            for pass in 1 2 3 4 5; do
-              echo "=== Dependency scan pass $pass ==="
-              NEW_LIBS=0
-
-              find "$APPDIR" \( -name '*.so*' -o -name 'Singularity' \) -exec ldd {} \; 2>/dev/null \
-                | grep -oP '\s(/usr/lib\S+)' | tr -d ' ' | sort -u > /tmp/appimage-deps.txt
-
-              while read -r SYS_LIB; do
-                [[ -f "$SYS_LIB" ]] || continue
-                LIB_NAME=$(basename "$SYS_LIB")
-                if ! find "$APPDIR" -name "$LIB_NAME" 2>/dev/null | grep -q .; then
-                  echo "  + $LIB_NAME"
-                  cp "$SYS_LIB" "$APPDIR_LIB/"
-                  NEW_LIBS=$((NEW_LIBS + 1))
-                fi
-              done < /tmp/appimage-deps.txt
-
-              echo "  Pass $pass: added $NEW_LIBS libraries"
-              if [[ "$NEW_LIBS" -eq 0 ]]; then
-                echo "All dependencies resolved."
-                break
-              fi
-            done
-
-            TOTAL=$(find "$APPDIR_LIB" -name '*.so*' | wc -l)
-            echo "Total libraries in AppDir/usr/lib: $TOTAL"
-
-            APPIMAGETOOL="$APPDIR/../appimagetool"
-            if [[ ! -f "$APPIMAGETOOL" ]]; then
-              wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O "$APPIMAGETOOL"
-              chmod +x "$APPIMAGETOOL"
-            fi
-            APPIMAGE_OUT=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)
-            "$APPIMAGETOOL" "$APPDIR" "$APPIMAGE_OUT" || echo "Note: appimagetool repack failed, using original AppImage"
-          fi
-
-      - name: Collect Build Artifacts
-        run: |
-          # AppImage
-          APPIMAGE=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)
-          if [[ -z "$APPIMAGE" ]]; then
-            echo "Error: No AppImage found"
-            exit 1
-          fi
-          cp "$APPIMAGE" SingularityMM-Linux.AppImage
-          echo "AppImage: $(ls -lh SingularityMM-Linux.AppImage)"
-
-          # DEB
-          DEB=$(find src-tauri/target/release/bundle/deb -name '*.deb' | head -1)
-          if [[ -z "$DEB" ]]; then
-            echo "Error: No .deb found"
-            exit 1
-          fi
-          cp "$DEB" SingularityMM-Linux.deb
-          echo "DEB: $(ls -lh SingularityMM-Linux.deb)"
-
-          # RPM
-          RPM=$(find src-tauri/target/release/bundle/rpm -name '*.rpm' | head -1)
-          if [[ -z "$RPM" ]]; then
-            echo "Error: No .rpm found"
-            exit 1
-          fi
-          cp "$RPM" SingularityMM-Linux.rpm
-          echo "RPM: $(ls -lh SingularityMM-Linux.rpm)"
+          npm run tauri build -- --no-bundle
 
       - name: Setup Flatpak
         run: |
@@ -188,30 +191,15 @@ jobs:
       - name: Build Flatpak
         run: |
           scripts/flatpak/build-flatpak.sh
-
           echo "Flatpak build complete!"
           ls -lh SingularityMM.flatpak
 
-      - name: Verify Build Artifacts
-        run: |
-          for file in SingularityMM-Linux.AppImage SingularityMM-Linux.deb SingularityMM-Linux.rpm SingularityMM.flatpak; do
-            if [[ ! -f "$file" ]]; then
-              echo "Error: Required artifact missing: $file"
-              exit 1
-            fi
-            echo "Found: $file ($(du -h "$file" | cut -f1))"
-          done
-
-      - name: Upload Linux Assets to Release
+      - name: Upload Flatpak to Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: false
-          files: |
-            SingularityMM-Linux.AppImage
-            SingularityMM-Linux.deb
-            SingularityMM-Linux.rpm
-            SingularityMM.flatpak
+          files: SingularityMM.flatpak
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
