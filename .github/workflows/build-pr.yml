@@ -102,20 +102,27 @@ jobs:
           APPDIR=$(find src-tauri/target/release/bundle/appimage -name '*.AppDir' -type d | head -1)
           if [[ -n "$APPDIR" ]]; then
             echo "AppDir found: $APPDIR"
-            # Copy missing transitive libs that linuxdeploy misses
-            for lib in libfribidi.so.0 libharfbuzz.so.0; do
-              if ! find "$APPDIR" -name "$lib" | grep -q .; then
-                SYS_LIB=$(find /usr/lib -name "$lib" 2>/dev/null | head -1)
-                if [[ -n "$SYS_LIB" ]]; then
-                  echo "Injecting missing lib: $lib from $SYS_LIB"
-                  cp "$SYS_LIB" "$APPDIR/usr/lib/"
-                else
-                  echo "WARNING: $lib not found on system"
-                fi
-              else
-                echo "$lib already bundled"
+            APPDIR_LIB="$APPDIR/usr/lib"
+            mkdir -p "$APPDIR_LIB"
+
+            # Use ldd on all bundled .so files and the main binary to find every
+            # transitive dependency, then copy any that aren't already in the AppDir.
+            echo "Scanning for missing transitive libraries..."
+            MISSING_COUNT=0
+            # Collect all "not found" libs plus libs resolved to system paths
+            {
+              find "$APPDIR" -name '*.so*' -exec ldd {} \; 2>/dev/null
+              ldd "$APPDIR/usr/bin/Singularity" 2>/dev/null || true
+            } | grep -oP '/usr/lib/\S+' | sort -u | while read -r SYS_LIB; do
+              LIB_NAME=$(basename "$SYS_LIB")
+              # Skip libs that are already bundled
+              if ! find "$APPDIR_LIB" -name "$LIB_NAME" | grep -q .; then
+                echo "  Bundling: $LIB_NAME"
+                cp "$SYS_LIB" "$APPDIR_LIB/"
+                MISSING_COUNT=$((MISSING_COUNT + 1))
               fi
             done
+            echo "Library patching complete."
 
             # Rebuild the AppImage from the patched AppDir
             APPIMAGETOOL="$APPDIR/../appimagetool"
