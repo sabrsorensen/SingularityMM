@@ -12,7 +12,21 @@
         pkgs = import nixpkgs { inherit system; };
         pname = "singularitymm";
         version = "dev";
-        src = ./.;
+
+        # Only include files needed for the build — excludes .github, screenshots,
+        # flatpak, scripts, build artifacts, etc.
+        src = pkgs.lib.fileset.toSource {
+          root = ./.;
+          fileset = pkgs.lib.fileset.unions [
+            ./src            # Frontend source
+            ./src-tauri       # Rust source, Cargo.toml, tauri.conf.json, icons
+            ./index.html      # Frontend entry point
+            ./package.json
+            ./package-lock.json
+            ./vite.config.js  # Vite build config
+          ];
+        };
+
         cargoHash = "sha256-WZ8J4tq3ksnx+7beTGYCjho0MXAD6XIoj3r31O6AIcI=";
         npmDeps = pkgs.fetchNpmDeps {
           name = "${pname}-${version}-npm-deps";
@@ -41,6 +55,148 @@
           tauriBuildFlags = [ "--config" ''{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'' ];
           tauriBundleType = "deb"; # Required — install hook extracts binary from deb bundle
         });
+
+        # Build scripts — shared between build and run apps
+        buildFlatpakScript = pkgs.writeShellApplication {
+          name = "build-flatpak-bundle";
+          runtimeInputs = [
+            pkgs.appstream
+            pkgs.flatpak
+            pkgs.flatpak-builder
+            pkgs.coreutils
+            pkgs.gawk
+            pkgs.findutils
+            pkgs.gnused
+            pkgs.gnutar
+            pkgs.gzip
+            pkgs.jq
+            pkgs.which
+          ];
+          text = ''
+            set -e
+            REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+            cd "$REPO_ROOT"
+
+            echo "Cleaning previous build artifacts..."
+            rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
+
+            # Copy resources using shared script (with Nix-built binary)
+            SINGULARITY_BIN="${singularity}/bin/Singularity" scripts/flatpak/copy-resources.sh
+
+            # Ensure required Flatpak runtimes are installed
+            REQUIRED_SDK="org.gnome.Sdk//49"
+            REQUIRED_PLATFORM="org.gnome.Platform//49"
+
+            if ! flatpak info $REQUIRED_SDK > /dev/null 2>&1; then
+              echo "Flatpak runtime $REQUIRED_SDK not found. Installing from flathub..."
+              flatpak install -y flathub $REQUIRED_SDK
+            fi
+            if ! flatpak info $REQUIRED_PLATFORM > /dev/null 2>&1; then
+              echo "Flatpak platform $REQUIRED_PLATFORM not found. Installing from flathub..."
+              flatpak install -y flathub $REQUIRED_PLATFORM
+            fi
+
+            echo "Running flatpak-builder..."
+            flatpak-builder --repo=flatpak-repo --force-clean --disable-updates --disable-rofiles-fuse flatpak-build flatpak/com.syzzle.Singularity.json
+            echo "Creating Flatpak bundle..."
+            flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
+            echo "Flatpak build and bundle complete. Output: SingularityMM.flatpak"
+          '';
+        };
+
+        buildAppimageScript = pkgs.writeShellApplication {
+          name = "build-appimage";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.file
+            pkgs.findutils
+            pkgs.gnused
+            pkgs.patchelf
+            pkgs.wget
+            pkgs.zsync
+          ];
+          text = ''
+            set -e
+            REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+            cd "$REPO_ROOT"
+
+            APPDIR="SingularityMM.AppDir"
+            echo "Preparing AppDir..."
+            rm -rf "$APPDIR" SingularityMM-Linux.AppImage
+
+            mkdir -p "$APPDIR/usr/bin"
+            mkdir -p "$APPDIR/usr/lib"
+            mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
+            mkdir -p "$APPDIR/usr/share/applications"
+
+            # Copy binary
+            cp "${singularity}/bin/Singularity" "$APPDIR/usr/bin/Singularity"
+            chmod +x "$APPDIR/usr/bin/Singularity"
+
+            # Copy icon
+            if [ -f src-tauri/icons/128x128.png ]; then
+              cp src-tauri/icons/128x128.png "$APPDIR/usr/share/icons/hicolor/128x128/apps/singularity.png"
+              cp src-tauri/icons/128x128.png "$APPDIR/singularity.png"
+            fi
+
+            # Create desktop file from template (adapt Exec/Icon for AppImage)
+            sed -e 's|^Exec=.*|Exec=Singularity|' \
+                -e 's|^Icon=.*|Icon=singularity|' \
+                flatpak/singularity-mm.desktop.template > "$APPDIR/singularity.desktop"
+            cp "$APPDIR/singularity.desktop" "$APPDIR/usr/share/applications/"
+
+            # Create AppRun
+            cat > "$APPDIR/AppRun" <<'APPRUN'
+            #!/bin/bash
+            HERE="$(dirname "$(readlink -f "$0")")"
+            export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+            export GDK_BACKEND=x11
+            exec "$HERE/usr/bin/Singularity" "$@"
+            APPRUN
+            chmod +x "$APPDIR/AppRun"
+
+            # Bundle shared libraries from the Nix-built binary
+            echo "Bundling shared libraries..."
+            ldd "$APPDIR/usr/bin/Singularity" 2>/dev/null | grep -oP '/nix/store/\S+' | sort -u | while read -r LIB; do
+              LIB_NAME=$(basename "$LIB")
+              if [[ "$LIB_NAME" != "ld-linux"* ]] && [[ "$LIB_NAME" != "libc.so"* ]] && [[ "$LIB_NAME" != "libpthread"* ]] && [[ "$LIB_NAME" != "libdl"* ]] && [[ "$LIB_NAME" != "libm.so"* ]] && [[ "$LIB_NAME" != "librt"* ]]; then
+                cp "$LIB" "$APPDIR/usr/lib/"
+              fi
+            done
+
+            # Also bundle transitive deps of bundled libs
+            echo "Bundling transitive dependencies..."
+            for i in 1 2 3; do
+              FOUND_NEW=false
+              find "$APPDIR/usr/lib" -name '*.so*' -exec ldd {} \; 2>/dev/null | grep -oP '/nix/store/\S+' | sort -u | while read -r LIB; do
+                LIB_NAME=$(basename "$LIB")
+                if ! [ -f "$APPDIR/usr/lib/$LIB_NAME" ]; then
+                  if [[ "$LIB_NAME" != "ld-linux"* ]] && [[ "$LIB_NAME" != "libc.so"* ]] && [[ "$LIB_NAME" != "libpthread"* ]] && [[ "$LIB_NAME" != "libdl"* ]] && [[ "$LIB_NAME" != "libm.so"* ]] && [[ "$LIB_NAME" != "librt"* ]]; then
+                    cp "$LIB" "$APPDIR/usr/lib/"
+                    FOUND_NEW=true
+                  fi
+                fi
+              done
+              if [ "$FOUND_NEW" = false ]; then
+                break
+              fi
+            done
+
+            echo "Bundled $(find "$APPDIR/usr/lib" -name '*.so*' | wc -l) libraries"
+
+            # Download appimagetool and build
+            TOOL="appimagetool-x86_64.AppImage"
+            if [ ! -f "$TOOL" ]; then
+              echo "Downloading appimagetool..."
+              wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/$TOOL"
+              chmod +x "$TOOL"
+            fi
+
+            echo "Building AppImage..."
+            ARCH=x86_64 ./"$TOOL" "$APPDIR" SingularityMM-Linux.AppImage
+            echo "AppImage built: SingularityMM-Linux.AppImage ($(du -h SingularityMM-Linux.AppImage | cut -f1))"
+          '';
+        };
       in
       {
         # nix build — compile check only, produces the binary
@@ -53,156 +209,66 @@
         };
 
         # nix run .#flatpak — build flatpak bundle (requires host flatpak runtimes)
-        apps.flatpak = let
+        apps.flatpak = {
+          type = "app";
+          program = "${buildFlatpakScript}/bin/build-flatpak-bundle";
+        };
+
+        # nix run .#run-flatpak — build, install, and run the flatpak
+        apps.run-flatpak = let
           script = pkgs.writeShellApplication {
-            name = "build-flatpak-bundle";
-            runtimeInputs = [
-              pkgs.appstream
-              pkgs.flatpak
-              pkgs.flatpak-builder
-              pkgs.coreutils
-              pkgs.gawk
-              pkgs.findutils
-              pkgs.gnused
-              pkgs.gnutar
-              pkgs.gzip
-              pkgs.jq
-              pkgs.which
-            ];
+            name = "run-flatpak";
+            runtimeInputs = [ pkgs.flatpak ];
             text = ''
               set -e
+
+              # Build the flatpak first
+              echo "=== Building Flatpak ==="
+              ${buildFlatpakScript}/bin/build-flatpak-bundle
+
               REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-              cd "$REPO_ROOT"
+              FLATPAK="$REPO_ROOT/SingularityMM.flatpak"
 
-              echo "Cleaning previous build artifacts..."
-              rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
-
-              # Copy resources using shared script (with Nix-built binary)
-              SINGULARITY_BIN="${singularity}/bin/Singularity" scripts/flatpak/copy-resources.sh
-
-              # Ensure required Flatpak runtimes are installed
-              REQUIRED_SDK="org.gnome.Sdk//49"
-              REQUIRED_PLATFORM="org.gnome.Platform//49"
-
-              if ! flatpak info $REQUIRED_SDK > /dev/null 2>&1; then
-                echo "Flatpak runtime $REQUIRED_SDK not found. Installing from flathub..."
-                flatpak install -y flathub $REQUIRED_SDK
-              fi
-              if ! flatpak info $REQUIRED_PLATFORM > /dev/null 2>&1; then
-                echo "Flatpak platform $REQUIRED_PLATFORM not found. Installing from flathub..."
-                flatpak install -y flathub $REQUIRED_PLATFORM
-              fi
-
-              echo "Running flatpak-builder..."
-              flatpak-builder --repo=flatpak-repo --force-clean --disable-updates --disable-rofiles-fuse flatpak-build flatpak/com.syzzle.Singularity.json
-              echo "Creating Flatpak bundle..."
-              flatpak build-bundle flatpak-repo SingularityMM.flatpak com.syzzle.Singularity
-              echo "Flatpak build and bundle complete. Output: SingularityMM.flatpak"
+              echo "=== Installing Flatpak ==="
+              flatpak install -y --user "$FLATPAK"
+              echo "=== Launching Singularity ==="
+              flatpak run com.syzzle.Singularity
             '';
           };
         in {
           type = "app";
-          program = "${script}/bin/build-flatpak-bundle";
+          program = "${script}/bin/run-flatpak";
         };
 
         # nix run .#appimage — build AppImage (runs outside sandbox, needs linuxdeploy)
-        apps.appimage = let
+        apps.appimage = {
+          type = "app";
+          program = "${buildAppimageScript}/bin/build-appimage";
+        };
+
+        # nix run .#run-appimage — build and run the AppImage
+        apps.run-appimage = let
           script = pkgs.writeShellApplication {
-            name = "build-appimage";
-            runtimeInputs = [
-              pkgs.coreutils
-              pkgs.file
-              pkgs.findutils
-              pkgs.gnused
-              pkgs.patchelf
-              pkgs.wget
-              pkgs.zsync
-            ];
+            name = "run-appimage";
+            runtimeInputs = [ pkgs.coreutils ];
             text = ''
               set -e
+
+              # Build the AppImage first
+              echo "=== Building AppImage ==="
+              ${buildAppimageScript}/bin/build-appimage
+
               REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-              cd "$REPO_ROOT"
+              APPIMAGE="$REPO_ROOT/SingularityMM-Linux.AppImage"
 
-              APPDIR="SingularityMM.AppDir"
-              echo "Preparing AppDir..."
-              rm -rf "$APPDIR" SingularityMM-Linux.AppImage
-
-              mkdir -p "$APPDIR/usr/bin"
-              mkdir -p "$APPDIR/usr/lib"
-              mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
-              mkdir -p "$APPDIR/usr/share/applications"
-
-              # Copy binary
-              cp "${singularity}/bin/Singularity" "$APPDIR/usr/bin/Singularity"
-              chmod +x "$APPDIR/usr/bin/Singularity"
-
-              # Copy icon
-              if [ -f src-tauri/icons/128x128.png ]; then
-                cp src-tauri/icons/128x128.png "$APPDIR/usr/share/icons/hicolor/128x128/apps/singularity.png"
-                cp src-tauri/icons/128x128.png "$APPDIR/singularity.png"
-              fi
-
-              # Create desktop file from template (adapt Exec/Icon for AppImage)
-              sed -e 's|^Exec=.*|Exec=Singularity|' \
-                  -e 's|^Icon=.*|Icon=singularity|' \
-                  flatpak/singularity-mm.desktop.template > "$APPDIR/singularity.desktop"
-              cp "$APPDIR/singularity.desktop" "$APPDIR/usr/share/applications/"
-
-              # Create AppRun
-              cat > "$APPDIR/AppRun" <<'APPRUN'
-              #!/bin/bash
-              HERE="$(dirname "$(readlink -f "$0")")"
-              export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
-              export GDK_BACKEND=x11
-              exec "$HERE/usr/bin/Singularity" "$@"
-              APPRUN
-              chmod +x "$APPDIR/AppRun"
-
-              # Bundle shared libraries from the Nix-built binary
-              echo "Bundling shared libraries..."
-              ldd "$APPDIR/usr/bin/Singularity" 2>/dev/null | grep -oP '/nix/store/\S+' | sort -u | while read -r LIB; do
-                LIB_NAME=$(basename "$LIB")
-                if [[ "$LIB_NAME" != "ld-linux"* ]] && [[ "$LIB_NAME" != "libc.so"* ]] && [[ "$LIB_NAME" != "libpthread"* ]] && [[ "$LIB_NAME" != "libdl"* ]] && [[ "$LIB_NAME" != "libm.so"* ]] && [[ "$LIB_NAME" != "librt"* ]]; then
-                  cp "$LIB" "$APPDIR/usr/lib/"
-                fi
-              done
-
-              # Also bundle transitive deps of bundled libs
-              echo "Bundling transitive dependencies..."
-              for i in 1 2 3; do
-                FOUND_NEW=false
-                find "$APPDIR/usr/lib" -name '*.so*' -exec ldd {} \; 2>/dev/null | grep -oP '/nix/store/\S+' | sort -u | while read -r LIB; do
-                  LIB_NAME=$(basename "$LIB")
-                  if ! [ -f "$APPDIR/usr/lib/$LIB_NAME" ]; then
-                    if [[ "$LIB_NAME" != "ld-linux"* ]] && [[ "$LIB_NAME" != "libc.so"* ]] && [[ "$LIB_NAME" != "libpthread"* ]] && [[ "$LIB_NAME" != "libdl"* ]] && [[ "$LIB_NAME" != "libm.so"* ]] && [[ "$LIB_NAME" != "librt"* ]]; then
-                      cp "$LIB" "$APPDIR/usr/lib/"
-                      FOUND_NEW=true
-                    fi
-                  fi
-                done
-                if [ "$FOUND_NEW" = false ]; then
-                  break
-                fi
-              done
-
-              echo "Bundled $(find "$APPDIR/usr/lib" -name '*.so*' | wc -l) libraries"
-
-              # Download appimagetool and build
-              TOOL="appimagetool-x86_64.AppImage"
-              if [ ! -f "$TOOL" ]; then
-                echo "Downloading appimagetool..."
-                wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/$TOOL"
-                chmod +x "$TOOL"
-              fi
-
-              echo "Building AppImage..."
-              ARCH=x86_64 ./"$TOOL" "$APPDIR" SingularityMM-Linux.AppImage
-              echo "AppImage built: SingularityMM-Linux.AppImage ($(du -h SingularityMM-Linux.AppImage | cut -f1))"
+              chmod +x "$APPIMAGE"
+              echo "=== Launching AppImage ==="
+              exec "$APPIMAGE"
             '';
           };
         in {
           type = "app";
-          program = "${script}/bin/build-appimage";
+          program = "${script}/bin/run-appimage";
         };
       }
     );

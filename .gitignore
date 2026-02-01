@@ -42,6 +42,11 @@ flatpak-repo/
 flatpak-source/
 portable-package/
 
+# AppImage / Flatpak build artifacts
+*.AppImage
+*.AppDir/
+SingularityMM.flatpak
+
 # Nix
 /result
 /result-
