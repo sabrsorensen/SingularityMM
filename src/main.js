@@ -810,6 +810,13 @@ document.addEventListener('DOMContentLoaded', () => {
       updateSliderFill(modsPerPageSlider);
     }
 
+    // Set up Auto-Install toggle
+    const autoInstallToggle = document.getElementById('autoInstallToggle');
+    autoInstallToggle.checked = localStorage.getItem('autoInstallAfterDownload') === 'true';
+    autoInstallToggle.addEventListener('change', function () {
+      localStorage.setItem('autoInstallAfterDownload', this.checked);
+    });
+
     // --- 4. HANDLE GAME PATH ---
     const gamePaths = await gameDetectPromise;
 
@@ -1476,6 +1483,10 @@ document.addEventListener('DOMContentLoaded', () => {
           item.statusClass = 'success';
           await saveDownloadHistory(downloadHistory);
           renderDownloadHistory();
+
+          if (localStorage.getItem('autoInstallAfterDownload') === 'true') {
+            await handleDownloadItemInstall(downloadId);
+          }
         }
       }
 
