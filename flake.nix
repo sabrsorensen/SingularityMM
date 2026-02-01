@@ -36,7 +36,7 @@
           ];
           cargoRoot = "src-tauri";
           buildAndTestSubdir = "src-tauri";
-          tauriBuildFlags = [ "--config" src-tauri/tauri.conf.json ];
+          tauriBuildFlags = [ "--config" ''{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'' ];
           tauriBundleType = null; # Build all targets from tauri.conf.json
         });
 

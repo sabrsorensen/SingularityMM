@@ -4,7 +4,7 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     nodejs_20
     (rust-bin.stable.latest.default)
-    webkitgtk gtk3 librsvg gdk-pixbuf atk cairo pango gobject-introspection glib dbus openssl pkg-config alsa-lib
+    webkitgtk gtk3 librsvg gdk-pixbuf atk cairo pango fribidi harfbuzz gobject-introspection glib dbus openssl pkg-config alsa-lib
     libappindicator-gtk3 libayatana-appindicator libxkbcommon libxrandr libx11 libxcomposite libxdamage libxfixes libxext libxrender libxcb libxinerama libxi libxtst libxss libxshmfence libxau libxdmcp libdrm mesa at-spi2-atk at-spi2-core nss nspr cups expat zlib libsecret libdbusmenu-gtk3 libnotify
     flatpak flatpak-builder patchelf git
   ];
