@@ -97,6 +97,36 @@ jobs:
           export PATH="$PATH:$(pwd)/node_modules/.bin"
           npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"active":false}}}'
 
+      - name: Patch AppImage Libraries
+        run: |
+          APPDIR=$(find src-tauri/target/release/bundle/appimage -name '*.AppDir' -type d | head -1)
+          if [[ -n "$APPDIR" ]]; then
+            echo "AppDir found: $APPDIR"
+            # Copy missing transitive libs that linuxdeploy misses
+            for lib in libfribidi.so.0 libharfbuzz.so.0; do
+              if ! find "$APPDIR" -name "$lib" | grep -q .; then
+                SYS_LIB=$(find /usr/lib -name "$lib" 2>/dev/null | head -1)
+                if [[ -n "$SYS_LIB" ]]; then
+                  echo "Injecting missing lib: $lib from $SYS_LIB"
+                  cp "$SYS_LIB" "$APPDIR/usr/lib/"
+                else
+                  echo "WARNING: $lib not found on system"
+                fi
+              else
+                echo "$lib already bundled"
+              fi
+            done
+
+            # Rebuild the AppImage from the patched AppDir
+            APPIMAGETOOL="$APPDIR/../appimagetool"
+            if [[ ! -f "$APPIMAGETOOL" ]]; then
+              wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O "$APPIMAGETOOL"
+              chmod +x "$APPIMAGETOOL"
+            fi
+            APPIMAGE_OUT=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)
+            "$APPIMAGETOOL" "$APPDIR" "$APPIMAGE_OUT" || echo "Note: appimagetool repack failed, using original AppImage"
+          fi
+
       - name: Collect Build Artifacts
         run: |
           # AppImage

@@ -30,7 +30,9 @@
             pkgs.pkg-config
           ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.wrapGAppsHook4 ];
           buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            pkgs.fribidi
             pkgs.glib-networking
+            pkgs.harfbuzz
             pkgs.openssl
             pkgs.webkitgtk_4_1
           ];
