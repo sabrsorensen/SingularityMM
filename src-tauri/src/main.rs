@@ -27,6 +27,7 @@ use std::time::UNIX_EPOCH;
 use tauri::path::BaseDirectory;
 use tauri::State;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_fs::FsExt;
 use tauri::{LogicalSize, PhysicalPosition};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use unrar;
@@ -1462,6 +1463,13 @@ fn detect_game_installation(app: AppHandle) -> Option<GamePaths> {
 
         if settings_dir.exists() {
             log_internal(&app, "INFO", &format!("Found game path: {:?}", path));
+
+            // Grant frontend filesystem access to the game directory
+            if let Err(e) = app.fs_scope().allow_directory(&path, true) {
+                log_internal(&app, "WARN", &format!("Failed to expand fs scope for game path: {}", e));
+            } else {
+                log_internal(&app, "INFO", &format!("Expanded fs scope for game path: {:?}", path));
+            }
 
             // Determine "Version Type" based on OS
             #[cfg(target_os = "windows")]
@@ -3402,6 +3410,14 @@ fn main() {
             rotate_logs(app_handle);
 
             log_internal(app_handle, "INFO", "=== SINGULARITY MANAGER STARTUP ===");
+
+            // Expand fs scope for app data directories
+            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                let _ = app_handle.fs_scope().allow_directory(&app_data, true);
+            }
+            if let Ok(data_dir) = app_handle.path().resolve("Singularity", BaseDirectory::Data) {
+                let _ = app_handle.fs_scope().allow_directory(&data_dir, true);
+            }
 
             let args: Vec<String> = std::env::args().collect();
 
