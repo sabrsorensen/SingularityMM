@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop">
+<component type="desktop-application">
   <id>com.syzzle.Singularity</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0+</project_license>
@@ -18,26 +18,28 @@
       <li>Cross-platform network compatibility</li>
     </ul>
   </description>
+  <launchable type="desktop-id">com.syzzle.Singularity.desktop</launchable>
   <screenshots>
     <screenshot type="default">
       <caption>Main interface showing installed mods</caption>
-      <image type="source">screenshots/Screenshot1.png</image>
+      <image type="source">https://raw.githubusercontent.com/Syzzle07/SingularityMM/main/screenshots/Screenshot1.png</image>
     </screenshot>
     <screenshot>
       <caption>Mod installation and management</caption>
-      <image type="source">screenshots/Screenshot2.png</image>
+      <image type="source">https://raw.githubusercontent.com/Syzzle07/SingularityMM/main/screenshots/Screenshot2.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings and configuration</caption>
-      <image type="source">screenshots/Screenshot3.png</image>
+      <image type="source">https://raw.githubusercontent.com/Syzzle07/SingularityMM/main/screenshots/Screenshot3.png</image>
     </screenshot>
   </screenshots>
   <url type="homepage">https://github.com/Syzzle07/SingularityMM</url>
   <url type="bugtracker">https://github.com/Syzzle07/SingularityMM/issues</url>
-  <developer_name>Syzzle</developer_name>
+  <developer id="com.syzzle">
+    <name>Syzzle</name>
+  </developer>
   <categories>
     <category>Game</category>
-    <category>Utility</category>
   </categories>
   <keywords>
     <keyword>No Man's Sky</keyword>

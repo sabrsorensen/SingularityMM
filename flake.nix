@@ -114,6 +114,7 @@
         buildAppimageScript = pkgs.writeShellApplication {
           name = "build-appimage";
           runtimeInputs = [
+            pkgs.appstream
             pkgs.coreutils
             pkgs.file
             pkgs.findutils
@@ -135,23 +136,27 @@
             mkdir -p "$APPDIR/usr/lib"
             mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
             mkdir -p "$APPDIR/usr/share/applications"
+            mkdir -p "$APPDIR/usr/share/metainfo"
 
             # Copy the unwrapped binary (skip the Nix GApps wrapper which
             # hardcodes /nix/store paths for GIO/GTK/XDG_DATA_DIRS)
             cp "${singularity}/bin/.Singularity-wrapped" "$APPDIR/usr/bin/Singularity"
             chmod +wx "$APPDIR/usr/bin/Singularity"
 
-            # Copy icon
+            # Copy icon (use reverse-DNS name to match component ID)
             if [ -f src-tauri/icons/128x128.png ]; then
-              cp src-tauri/icons/128x128.png "$APPDIR/usr/share/icons/hicolor/128x128/apps/singularity.png"
-              cp src-tauri/icons/128x128.png "$APPDIR/singularity.png"
+              cp src-tauri/icons/128x128.png "$APPDIR/usr/share/icons/hicolor/128x128/apps/com.syzzle.Singularity.png"
+              cp src-tauri/icons/128x128.png "$APPDIR/com.syzzle.Singularity.png"
             fi
 
             # Create desktop file from template (adapt Exec/Icon for AppImage)
             sed -e 's|^Exec=.*|Exec=Singularity|' \
-                -e 's|^Icon=.*|Icon=singularity|' \
-                flatpak/singularity-mm.desktop.template > "$APPDIR/singularity.desktop"
-            cp "$APPDIR/singularity.desktop" "$APPDIR/usr/share/applications/"
+                -e 's|^Icon=.*|Icon=com.syzzle.Singularity|' \
+                packaging/singularity.desktop.template > "$APPDIR/com.syzzle.Singularity.desktop"
+            cp "$APPDIR/com.syzzle.Singularity.desktop" "$APPDIR/usr/share/applications/"
+
+            # Copy AppStream metadata
+            cp packaging/singularity.metainfo.xml "$APPDIR/usr/share/metainfo/com.syzzle.Singularity.appdata.xml"
 
             # Create AppRun
             cat > "$APPDIR/AppRun" <<'APPRUN'

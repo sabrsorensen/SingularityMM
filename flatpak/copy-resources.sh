@@ -22,7 +22,7 @@ if [ -f src-tauri/icons/128x128.png ]; then
 fi
 
 # Copy metainfo.xml
-cp flatpak/com.syzzle.Singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
+cp packaging/singularity.metainfo.xml flatpak-source/singularity.metainfo.xml
 
 # Copy screenshots
 mkdir -p flatpak-source/screenshots
@@ -33,4 +33,4 @@ cp flatpak/singularity-wrapper flatpak-source/singularity-wrapper
 chmod +x flatpak-source/singularity-wrapper
 
 # Copy desktop file
-cp flatpak/singularity-mm.desktop.template flatpak-source/singularity.desktop
+cp packaging/singularity.desktop.template flatpak-source/singularity.desktop
