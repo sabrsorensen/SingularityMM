@@ -105,24 +105,37 @@ jobs:
             APPDIR_LIB="$APPDIR/usr/lib"
             mkdir -p "$APPDIR_LIB"
 
-            # Use ldd on all bundled .so files and the main binary to find every
-            # transitive dependency, then copy any that aren't already in the AppDir.
-            echo "Scanning for missing transitive libraries..."
-            MISSING_COUNT=0
-            # Collect all "not found" libs plus libs resolved to system paths
-            {
-              find "$APPDIR" -name '*.so*' -exec ldd {} \; 2>/dev/null
-              ldd "$APPDIR/usr/bin/Singularity" 2>/dev/null || true
-            } | grep -oP '/usr/lib/\S+' | sort -u | while read -r SYS_LIB; do
-              LIB_NAME=$(basename "$SYS_LIB")
-              # Skip libs that are already bundled
-              if ! find "$APPDIR_LIB" -name "$LIB_NAME" | grep -q .; then
-                echo "  Bundling: $LIB_NAME"
-                cp "$SYS_LIB" "$APPDIR_LIB/"
-                MISSING_COUNT=$((MISSING_COUNT + 1))
+            # Iteratively resolve all transitive dependencies until no new libs are found.
+            # Each pass scans all .so files in the AppDir, finds system libs they need,
+            # and copies any that aren't already bundled anywhere in the AppDir.
+            for pass in 1 2 3 4 5; do
+              echo "=== Dependency scan pass $pass ==="
+              NEW_LIBS=0
+
+              # Collect all system library paths referenced by everything in the AppDir
+              find "$APPDIR" \( -name '*.so*' -o -name 'Singularity' \) -exec ldd {} \; 2>/dev/null \
+                | grep -oP '\s(/usr/lib\S+)' | tr -d ' ' | sort -u > /tmp/appimage-deps.txt
+
+              while read -r SYS_LIB; do
+                [[ -f "$SYS_LIB" ]] || continue
+                LIB_NAME=$(basename "$SYS_LIB")
+                # Check if this lib exists ANYWHERE in the AppDir
+                if ! find "$APPDIR" -name "$LIB_NAME" 2>/dev/null | grep -q .; then
+                  echo "  + $LIB_NAME"
+                  cp "$SYS_LIB" "$APPDIR_LIB/"
+                  NEW_LIBS=$((NEW_LIBS + 1))
+                fi
+              done < /tmp/appimage-deps.txt
+
+              echo "  Pass $pass: added $NEW_LIBS libraries"
+              if [[ "$NEW_LIBS" -eq 0 ]]; then
+                echo "All dependencies resolved."
+                break
               fi
             done
-            echo "Library patching complete."
+
+            TOTAL=$(find "$APPDIR_LIB" -name '*.so*' | wc -l)
+            echo "Total libraries in AppDir/usr/lib: $TOTAL"
 
             # Rebuild the AppImage from the patched AppDir
             APPIMAGETOOL="$APPDIR/../appimagetool"

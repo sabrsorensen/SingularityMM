@@ -107,18 +107,32 @@ jobs:
             APPDIR_LIB="$APPDIR/usr/lib"
             mkdir -p "$APPDIR_LIB"
 
-            echo "Scanning for missing transitive libraries..."
-            {
-              find "$APPDIR" -name '*.so*' -exec ldd {} \; 2>/dev/null
-              ldd "$APPDIR/usr/bin/Singularity" 2>/dev/null || true
-            } | grep -oP '/usr/lib/\S+' | sort -u | while read -r SYS_LIB; do
-              LIB_NAME=$(basename "$SYS_LIB")
-              if ! find "$APPDIR_LIB" -name "$LIB_NAME" | grep -q .; then
-                echo "  Bundling: $LIB_NAME"
-                cp "$SYS_LIB" "$APPDIR_LIB/"
+            for pass in 1 2 3 4 5; do
+              echo "=== Dependency scan pass $pass ==="
+              NEW_LIBS=0
+
+              find "$APPDIR" \( -name '*.so*' -o -name 'Singularity' \) -exec ldd {} \; 2>/dev/null \
+                | grep -oP '\s(/usr/lib\S+)' | tr -d ' ' | sort -u > /tmp/appimage-deps.txt
+
+              while read -r SYS_LIB; do
+                [[ -f "$SYS_LIB" ]] || continue
+                LIB_NAME=$(basename "$SYS_LIB")
+                if ! find "$APPDIR" -name "$LIB_NAME" 2>/dev/null | grep -q .; then
+                  echo "  + $LIB_NAME"
+                  cp "$SYS_LIB" "$APPDIR_LIB/"
+                  NEW_LIBS=$((NEW_LIBS + 1))
+                fi
+              done < /tmp/appimage-deps.txt
+
+              echo "  Pass $pass: added $NEW_LIBS libraries"
+              if [[ "$NEW_LIBS" -eq 0 ]]; then
+                echo "All dependencies resolved."
+                break
               fi
             done
-            echo "Library patching complete."
+
+            TOTAL=$(find "$APPDIR_LIB" -name '*.so*' | wc -l)
+            echo "Total libraries in AppDir/usr/lib: $TOTAL"
 
             APPIMAGETOOL="$APPDIR/../appimagetool"
             if [[ ! -f "$APPIMAGETOOL" ]]; then
