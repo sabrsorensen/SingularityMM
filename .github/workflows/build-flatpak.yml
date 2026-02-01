@@ -64,11 +64,11 @@ jobs:
 
       - name: Prepare Flatpak Source
         run: |
-          scripts/flatpak/copy-resources.sh
+          flatpak/copy-resources.sh
 
       - name: Build Flatpak
         run: |
-          scripts/flatpak/build-flatpak.sh
+          flatpak/build-flatpak.sh
           echo "Flatpak build complete!"
           ls -lh SingularityMM.flatpak
 

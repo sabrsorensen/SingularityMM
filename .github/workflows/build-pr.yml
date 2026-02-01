@@ -4,6 +4,18 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "*.md"
+      - "LICENSE"
+      - "screenshots/**"
+      - ".vscode/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "shell.nix"
+      - ".gitignore"
+      - ".github/scripts/**"
+      - ".github/workflows/update_curated_list.yml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 jobs:

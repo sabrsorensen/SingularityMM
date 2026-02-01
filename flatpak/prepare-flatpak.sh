@@ -12,10 +12,10 @@ echo "Cleaning previous build artifacts..."
 rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
 
 # 1. Build the Tauri project (Rust binary + resources)
-scripts/build-binary.sh
+flatpak/build-binary.sh
 
 # 2. Prepare flatpak-source directory and copy all resources
-scripts/flatpak/copy-resources.sh
+flatpak/copy-resources.sh
 
 # 3. Build the Flatpak bundle
-scripts/flatpak/build-flatpak.sh
+flatpak/build-flatpak.sh

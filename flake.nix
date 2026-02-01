@@ -70,6 +70,7 @@
             pkgs.gnutar
             pkgs.gzip
             pkgs.jq
+            pkgs.patchelf
             pkgs.which
           ];
           text = ''
@@ -80,8 +81,14 @@
             echo "Cleaning previous build artifacts..."
             rm -rf flatpak-build flatpak-repo .flatpak-builder flatpak-source
 
-            # Copy resources using shared script (with Nix-built binary)
-            SINGULARITY_BIN="${singularity}/bin/Singularity" scripts/flatpak/copy-resources.sh
+            # Copy resources using the unwrapped binary (skip the Nix GApps wrapper
+            # since the flatpak runtime provides GTK/GIO libraries)
+            SINGULARITY_BIN="${singularity}/bin/.Singularity-wrapped" flatpak/copy-resources.sh
+
+            # Patch the binary for the flatpak runtime (replace Nix interpreter/rpath)
+            echo "Patching binary for flatpak runtime..."
+            chmod +w flatpak-source/Singularity
+            patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --remove-rpath flatpak-source/Singularity
 
             # Ensure required Flatpak runtimes are installed
             REQUIRED_SDK="org.gnome.Sdk//49"
@@ -129,9 +136,10 @@
             mkdir -p "$APPDIR/usr/share/icons/hicolor/128x128/apps"
             mkdir -p "$APPDIR/usr/share/applications"
 
-            # Copy binary
-            cp "${singularity}/bin/Singularity" "$APPDIR/usr/bin/Singularity"
-            chmod +x "$APPDIR/usr/bin/Singularity"
+            # Copy the unwrapped binary (skip the Nix GApps wrapper which
+            # hardcodes /nix/store paths for GIO/GTK/XDG_DATA_DIRS)
+            cp "${singularity}/bin/.Singularity-wrapped" "$APPDIR/usr/bin/Singularity"
+            chmod +wx "$APPDIR/usr/bin/Singularity"
 
             # Copy icon
             if [ -f src-tauri/icons/128x128.png ]; then
@@ -166,7 +174,7 @@
 
             # Also bundle transitive deps of bundled libs
             echo "Bundling transitive dependencies..."
-            for i in 1 2 3; do
+            for _pass in 1 2 3; do
               FOUND_NEW=false
               find "$APPDIR/usr/lib" -name '*.so*' -exec ldd {} \; 2>/dev/null | grep -oP '/nix/store/\S+' | sort -u | while read -r LIB; do
                 LIB_NAME=$(basename "$LIB")
