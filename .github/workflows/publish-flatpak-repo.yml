@@ -57,15 +57,18 @@ jobs:
           export DCONF_PROFILE=/dev/null
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y flathub org.gnome.Platform//49 org.gnome.Sdk//49
-
       - name: Setup GPG for Repo Signing
         run: |
           # Import CI GPG private key
           echo "${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}" | gpg --batch --import
 
-          # Get key ID for signing
-          GPG_KEY_ID=$(gpg --list-secret-keys --with-colons | grep sec | head -1 | cut -d':' -f5)
+          # Get key ID for signing (get the specific CI key we just imported)
+          GPG_KEY_ID=$(gpg --list-secret-keys --with-colons singularityci@sam.nesneros.space | grep sec | head -1 | cut -d':' -f5)
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
+          echo "Using GPG key: $GPG_KEY_ID"
+
+          # Verify we can sign
+          echo "test" | gpg --batch --yes --sign --armor --local-user $GPG_KEY_ID > /dev/null
 
           # Export public key for repo metadata
           gpg --armor --export $GPG_KEY_ID > flatpak-repo-signing.asc
@@ -95,30 +98,31 @@ jobs:
       - name: Deploy to GitHub Pages
         run: |
           CHANNEL="${{ steps.channel.outputs.name }}"
+          echo "Deploying to channel: $CHANNEL"
 
           # Configure git
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Clone gh-pages branch (or create it)
-          git clone --branch gh-pages --single-branch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages-deploy 2>/dev/null || {
-            mkdir gh-pages-deploy
-            cd gh-pages-deploy
-            git init
-            git checkout -b gh-pages
-            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-            cd ..
-          }
+          # Clone gh-pages branch
+          git clone --branch gh-pages --single-branch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages-deploy
 
           # Replace the channel directory with the new repo
           rm -rf "gh-pages-deploy/${CHANNEL}"
           cp -r flatpak-repo "gh-pages-deploy/${CHANNEL}"
 
-          # Copy the landing page
+          # Copy the landing page to root
           cp flatpak/gh-pages-index.html gh-pages-deploy/index.html
 
           # Commit and push
           cd gh-pages-deploy
           git add -A
-          git commit -m "Update ${CHANNEL} flatpak repo ($(date -u +%Y-%m-%dT%H:%M:%SZ))" || echo "No changes to commit"
-          git push origin gh-pages
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update ${CHANNEL} flatpak repo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push origin gh-pages
+            echo "Successfully deployed to GitHub Pages"
+          fi
