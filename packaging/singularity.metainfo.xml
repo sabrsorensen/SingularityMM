@@ -50,7 +50,7 @@
     <content_attribute id="social-info">mild</content_attribute>
   </content_rating>
   <releases>
-    <release version="2.2.7" date="2026-01-22">
+    <release version="2.2.8-test" date="2026-02-01">
       <description>
         <p>Linux compatibility release:</p>
         <ul>

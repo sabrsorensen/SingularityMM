@@ -27,11 +27,11 @@
           ];
         };
 
-        cargoHash = "sha256-WZ8J4tq3ksnx+7beTGYCjho0MXAD6XIoj3r31O6AIcI=";
+        cargoHash = "sha256-y7lhx30ZdX5qbNHTGt6RFCjkSs1Xqbrl36tRnbgWT/M=";
         npmDeps = pkgs.fetchNpmDeps {
           name = "${pname}-${version}-npm-deps";
           inherit src;
-          hash = "sha256-kerJjj8fg6nPcJHvqcz8jWBbYkvc61pY8TR7wJ77tc0=";
+          hash = "sha256-ppGlAecMgPAL2FTJfP4iyh/WDNguw3hAJ2y6fiAGlvw=";
         };
 
         # Shared build config — all packages reuse this derivation
