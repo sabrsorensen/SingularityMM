@@ -1,73 +1,23 @@
-name: Release Application Packages
+name: Build and Release Application
 
 # Trigger the workflow when you push a tag (e.g., v1.0.0)
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name for this release"
+        required: true
+        default: ""
 
 jobs:
-  publish-windows:
-    name: Build and Release Windows Package
-    runs-on: windows-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install Frontend Dependencies
-        run: npm install
-
-      - name: Build and Release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Singularity ${{ github.ref_name }}"
-          releaseBody: "Automatic release for version ${{ github.ref_name }}"
-          releaseDraft: true
-          prerelease: false
-
-      - name: Rename and Upload Portable
-        run: |
-          cd src-tauri/target/release/
-          mv Singularity.exe Singularity_Portable_${{ github.ref_name }}.exe
-        shell: bash
-
-      - name: Upload Portable Asset
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          prerelease: false
-          files: src-tauri/target/release/Singularity_Portable_${{ github.ref_name }}.exe
-
-  publish-linux:
-    name: Build and Release Linux Package
-    uses: ./.github/workflows/build-linux.yml
+  build-all-platforms:
+    name: Build All Platforms
+    uses: ./.github/workflows/build.yml
     with:
       release: true
-      tag_name: ${{ github.ref_name }}
-    secrets: inherit
-
-  publish-flatpak:
-    name: Build and Release Flatpak Package
-    uses: ./.github/workflows/build-flatpak.yml
-    with:
-      release: true
-      tag_name: ${{ github.ref_name }}
+      tag_name: ${{ inputs.tag_name || github.ref_name }}
+      targets: "windows,linux,flatpak"
     secrets: inherit
