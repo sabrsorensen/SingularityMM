@@ -79,7 +79,7 @@ jobs:
 
       - name: Build and Sign Flatpak OSTree Repository
         run: |
-          flatpak-builder --repo=flatpak-repo --force-clean --disable-updates flatpak-build flatpak/com.syzzle.Singularity.json
+          flatpak-builder --repo=flatpak-repo --force-clean --disable-updates --gpg-sign=$GPG_KEY_ID flatpak-build flatpak/com.syzzle.Singularity.json
 
           # Sign the repository with GPG
           flatpak build-update-repo --generate-static-deltas --prune --prune-depth=1 --gpg-sign=$GPG_KEY_ID flatpak-repo
