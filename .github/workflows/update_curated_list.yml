@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-and-deploy:
+    name: Update Curated Mod List Data
     runs-on: ubuntu-latest
     permissions:
       contents: write

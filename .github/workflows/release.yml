@@ -1,4 +1,4 @@
-name: Singularity Release
+name: Release Application Packages
 
 # Trigger the workflow when you push a tag (e.g., v1.0.0)
 on:
@@ -8,6 +8,7 @@ on:
 
 jobs:
   publish-windows:
+    name: Build and Release Windows Package
     runs-on: windows-latest
     permissions:
       contents: write
@@ -56,6 +57,7 @@ jobs:
           files: src-tauri/target/release/Singularity_Portable_${{ github.ref_name }}.exe
 
   publish-linux:
+    name: Build and Release Linux Package
     uses: ./.github/workflows/build-linux.yml
     with:
       release: true
@@ -63,6 +65,7 @@ jobs:
     secrets: inherit
 
   publish-flatpak:
+    name: Build and Release Flatpak Package
     uses: ./.github/workflows/build-flatpak.yml
     with:
       release: true

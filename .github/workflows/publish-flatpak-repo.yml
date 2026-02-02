@@ -1,4 +1,4 @@
-name: Publish Flatpak Repo
+name: Build and Publish Signed Flatpak Repository
 
 on:
   push:
@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-publish:
+  build-signed-flatpak-repo:
+    name: Build & Publish GPG-Signed Flatpak Repository
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install Build Dependencies (Tauri + Flatpak)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -33,23 +34,23 @@ jobs:
             flatpak \
             flatpak-builder
 
-      - name: Install Rust
+      - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Node.js
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Install Frontend Dependencies
+      - name: Install Frontend Dependencies (npm)
         run: npm install
 
-      - name: Build Binary
+      - name: Build Tauri Application Binary
         run: |
           export PATH="$PATH:$(pwd)/node_modules/.bin"
           npm run tauri build -- --no-bundle
 
-      - name: Setup Flatpak
+      - name: Setup Flatpak Build Environment
         run: |
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install -y flathub org.gnome.Platform//49 org.gnome.Sdk//49
@@ -57,7 +58,7 @@ jobs:
           export DCONF_PROFILE=/dev/null
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y flathub org.gnome.Platform//49 org.gnome.Sdk//49
-      - name: Setup GPG for Repo Signing
+      - name: Configure GPG Signing for Repository
         run: |
           # Import CI GPG private key
           echo "${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}" | gpg --batch --import
@@ -73,10 +74,10 @@ jobs:
           # Export public key for repo metadata
           gpg --armor --export $GPG_KEY_ID > flatpak-repo-signing.asc
 
-      - name: Prepare Flatpak Source
+      - name: Prepare Flatpak Application Sources
         run: flatpak/copy-resources.sh
 
-      - name: Build Flatpak and Export to OSTree Repo
+      - name: Build and Sign Flatpak OSTree Repository
         run: |
           flatpak-builder --repo=flatpak-repo --force-clean --disable-updates flatpak-build flatpak/com.syzzle.Singularity.json
 
@@ -86,7 +87,7 @@ jobs:
           # Copy GPG public key to repo for client verification
           cp flatpak-repo-signing.asc flatpak-repo/
 
-      - name: Determine Channel
+      - name: Determine Deployment Channel (stable/dev)
         id: channel
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -95,7 +96,7 @@ jobs:
             echo "name=repo" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy Signed Repository to GitHub Pages
         run: |
           CHANNEL="${{ steps.channel.outputs.name }}"
           echo "Deploying to channel: $CHANNEL"
