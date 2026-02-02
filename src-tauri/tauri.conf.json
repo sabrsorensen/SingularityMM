@@ -7,7 +7,7 @@
     "devUrl": "http://localhost:1420"
   },
   "bundle": {
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "active": true,
     "icon": [
       "icons/32x32.png",
@@ -23,7 +23,7 @@
   "identifier": "com.syzzle.Singularity",
   "plugins": {
     "updater": {
-      "active": true,
+      "active": false,
       "endpoints": [
         "https://gist.githubusercontent.com/Syzzle07/9d29be1615e75e9206520811047be899/raw/latest.json"
       ],
