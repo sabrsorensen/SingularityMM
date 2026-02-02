@@ -3,7 +3,7 @@ name: Update Curated Mod List
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *' # Runs at the top of every hour
+    - cron: "0 0 * * *" # Runs daily
 
 jobs:
   build-and-deploy:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       # Step 3: Run script
       - name: Generate curated_list.json
